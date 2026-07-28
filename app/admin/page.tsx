@@ -36,7 +36,10 @@ export default function AdminPage() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroSede,   setFiltroSede]   = useState('');
   const [filtroFecha,  setFiltroFecha]  = useState('');
-  const [horFecha,     setHorFecha]     = useState(() => new Date().toISOString().split('T')[0]);
+  const [horFecha,     setHorFecha]     = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [horSede,      setHorSede]      = useState('');
 
   // Modal states

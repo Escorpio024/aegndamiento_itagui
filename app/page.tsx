@@ -1,18 +1,20 @@
 import Link from 'next/link';
 import HeroParticles from '@/components/HeroParticles';
+import db from '@/lib/db';
+import { runSeed } from '@/lib/seed';
 
-// Server Component — fetches data on the server
-async function getProcedimientos() {
+// Server Component — queries DB directly
+function getProcedimientos() {
   try {
-    const r = await fetch('http://localhost:3000/api/procedimientos', { cache: 'no-store' });
-    return r.ok ? r.json() : [];
+    runSeed();
+    return db.prepare('SELECT * FROM procedimientos WHERE activo=1 ORDER BY nombre').all();
   } catch { return []; }
 }
 
-async function getSedes() {
+function getSedes() {
   try {
-    const r = await fetch('http://localhost:3000/api/sedes', { cache: 'no-store' });
-    return r.ok ? r.json() : [];
+    runSeed();
+    return db.prepare('SELECT * FROM sedes WHERE activa = 1 ORDER BY nombre').all();
   } catch { return []; }
 }
 
@@ -117,7 +119,6 @@ export default async function HomePage() {
             {procedimientos.map((p: any) => (
               <div key={p.id} className="procedure-card">
                 <div className="proc-icon">{getProcIcon(p.nombre)}</div>
-                <div className="proc-cups">CUPS {p.cups}</div>
                 <div className="proc-name">{p.nombre}</div>
                 <BadgeContraste c={p.contraste} />
               </div>

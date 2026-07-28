@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
+import { runSeed } from '@/lib/seed';
 
 export async function GET() {
+  runSeed();
   const rows = db.prepare('SELECT * FROM procedimientos WHERE activo=1 ORDER BY nombre').all();
   return NextResponse.json(rows);
 }

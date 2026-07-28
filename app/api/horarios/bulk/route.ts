@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         const hF = String(Math.floor((m + duracion) / 60)).padStart(2, '0');
         const mF = String((m + duracion) % 60).padStart(2, '0');
         const r = stmt.run(sedeId, doctorId, fechaStr, `${hI}:${mI}`, `${hF}:${mF}`);
-        creados += r.changes;
+        creados += Number(r.changes);
       }
     }
     db.exec('COMMIT;');

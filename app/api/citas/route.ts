@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const fecha  = searchParams.get('fecha');
 
   if (session.rol === 'admin') {
-    const params: unknown[] = [];
+    const params: any[] = [];
     let where = 'WHERE 1=1';
     if (estado) { where += ' AND c.estado=?'; params.push(estado); }
     if (sedeId) { where += ' AND c.sede_id=?'; params.push(sedeId); }

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSession, requireAdmin } from '@/lib/auth';
+import { runSeed } from '@/lib/seed';
 
 export async function GET(req: Request) {
+  runSeed();
   const session = await getSession();
   const { searchParams } = new URL(req.url);
   const all = searchParams.get('all') === 'true' && session?.rol === 'admin';

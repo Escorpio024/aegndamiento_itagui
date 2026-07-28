@@ -16,6 +16,12 @@ export function runSeed() {
     console.log('✅ Admin creado');
   }
 
+  // ─── Limpiar posibles duplicados de sedes y doctores ──────────
+  db.exec(`
+    DELETE FROM doctores WHERE id NOT IN (SELECT MIN(id) FROM doctores GROUP BY nombre);
+    DELETE FROM sedes WHERE id NOT IN (SELECT MIN(id) FROM sedes GROUP BY nombre);
+  `);
+
   // ─── Sedes ────────────────────────────────────────────────────
   const sedes = [
     { nombre: 'Sede Central Itagüi',     direccion: 'Calle 50 #45-23, Centro',       ciudad: 'Itagüi', telefono: '3609000' },
@@ -23,8 +29,11 @@ export function runSeed() {
     { nombre: 'Sede La Independencia',    direccion: 'Av. Guayabal #38-15',            ciudad: 'Itagüi', telefono: '3609200' },
   ];
   for (const s of sedes) {
-    db.prepare('INSERT OR IGNORE INTO sedes (nombre, direccion, ciudad, telefono) VALUES (?, ?, ?, ?)')
-      .run(s.nombre, s.direccion, s.ciudad, s.telefono);
+    const exists = db.prepare('SELECT id FROM sedes WHERE nombre = ?').get(s.nombre);
+    if (!exists) {
+      db.prepare('INSERT INTO sedes (nombre, direccion, ciudad, telefono) VALUES (?, ?, ?, ?)')
+        .run(s.nombre, s.direccion, s.ciudad, s.telefono);
+    }
   }
 
   // ─── Doctores ─────────────────────────────────────────────────
@@ -34,7 +43,10 @@ export function runSeed() {
     { nombre: 'Dr. Andrés Vélez Torres',    especialidad: 'Radiología e Imágenes Diagnósticas' },
   ];
   for (const d of doctores) {
-    db.prepare('INSERT OR IGNORE INTO doctores (nombre, especialidad) VALUES (?, ?)').run(d.nombre, d.especialidad);
+    const exists = db.prepare('SELECT id FROM doctores WHERE nombre = ?').get(d.nombre);
+    if (!exists) {
+      db.prepare('INSERT INTO doctores (nombre, especialidad) VALUES (?, ?)').run(d.nombre, d.especialidad);
+    }
   }
 
   // ─── Procedimientos (29 del Excel) ────────────────────────────
@@ -74,6 +86,46 @@ export function runSeed() {
   for (const p of procs) {
     insertProc.run(p.cups, p.nombre, 'IMAGENES_DIAGNOSTICAS', p.contraste);
   }
+  // ─── Horarios de muestra para hoy y los próximos 14 días ────
+  const horariosCount = db.prepare("SELECT COUNT(*) as c FROM horarios").get() as { c: number };
+  if (horariosCount.c === 0) {
+    const insertHorario = db.prepare(
+      'INSERT OR IGNORE INTO horarios (sede_id, doctor_id, fecha, hora_inicio, hora_fin, disponible) VALUES (?, ?, ?, ?, ?, 1)'
+    );
+    const sedesList = db.prepare('SELECT id FROM sedes').all() as { id: number }[];
+    const doctoresList = db.prepare('SELECT id FROM doctores').all() as { id: number }[];
+
+    if (sedesList.length > 0 && doctoresList.length > 0) {
+      const hoy = new Date();
+      db.exec('BEGIN TRANSACTION;');
+      try {
+        for (let idx = 0; idx < 15; idx++) {
+          const d = new Date(hoy);
+          d.setDate(hoy.getDate() + idx);
+          const fechaStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const horas = [
+            ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'],
+            ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'], ['11:30', '12:00'],
+            ['14:00', '14:30'], ['14:30', '15:00'], ['15:00', '15:30'], ['15:30', '16:00'],
+            ['16:00', '16:30'], ['16:30', '17:00'],
+          ];
+          for (let sIdx = 0; sIdx < sedesList.length; sIdx++) {
+            const sedeId = sedesList[sIdx].id;
+            const doctorId = doctoresList[sIdx % doctoresList.length].id;
+            for (const [hInicio, hFin] of horas) {
+              insertHorario.run(sedeId, doctorId, fechaStr, hInicio, hFin);
+            }
+          }
+        }
+        db.exec('COMMIT;');
+        console.log('✅ Horarios de muestra creados');
+      } catch (e) {
+        db.exec('ROLLBACK;');
+        console.error('Error al generar horarios:', e);
+      }
+    }
+  }
 
   console.log('🌱 Seed completado');
 }
+

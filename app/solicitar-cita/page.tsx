@@ -31,7 +31,10 @@ export default function SolicitarCitaPage() {
   const [tieneAutorizacion, setTieneAutorizacion] = useState<boolean|null>(null);
   const [autoriza,  setAutoriza]  = useState('');
   const [obs,       setObs]       = useState('');
-  const [fecha,     setFecha]     = useState(() => new Date().toISOString().split('T')[0]);
+  const [fecha,     setFecha]     = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const selectedSede = sedes.find(s => s.id === sedeId);
   const selectedProc = procs.find(p => p.id === procId);
@@ -171,7 +174,6 @@ export default function SolicitarCitaPage() {
                 }}>
                 <div>
                   <div style={{ fontWeight:600, color:'var(--text-1)', fontSize:'.92rem' }}>{p.nombre}</div>
-                  <div style={{ fontSize:'.73rem', color:'var(--text-3)', marginTop:3 }}>CUPS {p.cups}</div>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   {p.contraste === 'Simple' && <span className="badge badge-simple">Simple</span>}

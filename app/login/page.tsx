@@ -1,12 +1,12 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';
 
 const TIPOS_DOC = ['CC','TI','CE','PP','PPT','RC','SC'];
 const REGIMENES = ['CONTRIBUTIVO','SUBSIDIADO'];
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const params = useSearchParams();
   const toast  = useToast();
@@ -149,5 +149,13 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '80px 20px', textAlign: 'center' }}>Cargando...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

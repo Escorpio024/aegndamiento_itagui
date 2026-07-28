@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSession, requireAdmin } from '@/lib/auth';
+import { runSeed } from '@/lib/seed';
 
 // GET /api/horarios?sedeId=&fecha=&admin=true
 export async function GET(req: Request) {
+  runSeed();
   const session = await getSession();
   const { searchParams } = new URL(req.url);
   const sedeId = searchParams.get('sedeId');
   const fecha  = searchParams.get('fecha');
   const isAdmin = searchParams.get('admin') === 'true' && session?.rol === 'admin';
 
-  const params: unknown[] = [];
+  const params: any[] = [];
   let where = isAdmin ? 'WHERE 1=1' : 'WHERE h.disponible=1';
 
   if (sedeId) { where += ' AND h.sede_id=?'; params.push(sedeId); }
