@@ -32,11 +32,10 @@ function LoginContent() {
       if (!r.ok) { setError(data.error); return; }
       toast('¡Bienvenido! Sesión iniciada.', 'success');
       if (data.user?.rol === 'admin') {
-        router.push('/admin');
+        window.location.href = '/admin';
       } else {
-        router.push(params.get('redirect') || '/solicitar-cita');
+        window.location.href = params.get('redirect') || '/solicitar-cita';
       }
-      router.refresh();
     } catch { setError('Error de conexión. Intente nuevamente.'); }
     finally { setLoading(false); }
   };
@@ -52,11 +51,10 @@ function LoginContent() {
       if (!r.ok) { setError(data.error); return; }
       toast('¡Cuenta creada exitosamente!', 'success');
       if (data.user?.rol === 'admin') {
-        router.push('/admin');
+        window.location.href = '/admin';
       } else {
-        router.push(params.get('redirect') || '/solicitar-cita');
+        window.location.href = params.get('redirect') || '/solicitar-cita';
       }
-      router.refresh();
     } catch { setError('Error de conexión.'); }
     finally { setLoading(false); }
   };
