@@ -33,12 +33,12 @@ export async function GET(req: Request) {
     if (estado) { where += ' AND c.estado=?'; params.push(estado); }
     if (sedeId) { where += ' AND c.sede_id=?'; params.push(sedeId); }
     if (fecha)  { where += ' AND h.fecha=?';   params.push(fecha); }
-    const rows = db.prepare(`${CITA_JOIN} ${where} ORDER BY h.fecha DESC, h.hora_inicio DESC`).all(...params);
+    const rows = await db.prepare(`${CITA_JOIN} ${where} ORDER BY h.fecha DESC, h.hora_inicio DESC`).all(...params);
     return NextResponse.json(rows);
   }
 
   // Paciente — solo sus citas
-  const rows = db.prepare(
+  const rows = await db.prepare(
     `${CITA_JOIN} WHERE c.usuario_id=? ORDER BY h.fecha DESC, h.hora_inicio DESC`
   ).all(session.id);
   return NextResponse.json(rows);
@@ -53,27 +53,22 @@ export async function POST(req: Request) {
   if (!procedimientoId || !horarioId || !sedeId)
     return NextResponse.json({ error: 'Procedimiento, horario y sede son obligatorios.' }, { status: 400 });
 
-  const horario = db.prepare('SELECT * FROM horarios WHERE id=? AND disponible=1').get(horarioId) as any;
+  const horario = await db.prepare('SELECT * FROM horarios WHERE id=? AND disponible=1').get(horarioId) as any;
   if (!horario) return NextResponse.json({ error: 'El horario ya no está disponible.' }, { status: 409 });
   if (horario.sede_id !== Number(sedeId)) return NextResponse.json({ error: 'Sede no coincide con el horario.' }, { status: 400 });
 
-  let citaId: number;
-  db.exec('BEGIN TRANSACTION;');
   try {
-    const r = db.prepare(
+    const r = await db.prepare(
       `INSERT INTO citas (usuario_id, procedimiento_id, horario_id, sede_id, autorizacion, observaciones, estado)
        VALUES (?,?,?,?,?,?, 'CONFIRMADA')`
     ).run(session.id, procedimientoId, horarioId, sedeId, autorizacion ?? null, observaciones ?? null);
-    
-    db.prepare('UPDATE horarios SET disponible=0 WHERE id=?').run(horarioId);
-    citaId = Number(r.lastInsertRowid);
-    db.exec('COMMIT;');
+
+    await db.prepare('UPDATE horarios SET disponible=0 WHERE id=?').run(horarioId);
+
+    const cita = await db.prepare(`${CITA_JOIN} WHERE c.id=?`).get(r.lastInsertRowid);
+    return NextResponse.json(cita, { status: 201 });
   } catch (err: any) {
-    db.exec('ROLLBACK;');
     if (err.message?.includes('UNIQUE')) return NextResponse.json({ error: 'Ese horario ya fue reservado.' }, { status: 409 });
     throw err;
   }
-
-  const cita = db.prepare(`${CITA_JOIN} WHERE c.id=?`).get(citaId);
-  return NextResponse.json(cita, { status: 201 });
 }

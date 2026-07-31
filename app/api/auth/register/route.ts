@@ -5,13 +5,9 @@ import { signToken } from '@/lib/jwt';
 import { getSession, COOKIE, cookieOptions } from '@/lib/auth';
 import { runSeed } from '@/lib/seed';
 
-// Seed automático al primer uso
-let seeded = false;
-function ensureSeeded() { if (!seeded) { runSeed(); seeded = true; } }
-
 // ─── POST /api/auth/register ──────────────────────────────
 export async function POST(req: Request) {
-  ensureSeeded();
+  await runSeed();
   const { nombre, documento, tipoDoc, telefono, email, password, regimen } = await req.json();
 
   if (!nombre || !documento || !tipoDoc || !telefono || !email || !password) {
@@ -21,19 +17,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'La contraseña debe tener mínimo 6 caracteres.' }, { status: 400 });
   }
 
-  const existing = db.prepare('SELECT id FROM usuarios WHERE email = ? OR documento = ?')
+  const existing = await db.prepare('SELECT id FROM usuarios WHERE email = ? OR documento = ?')
     .get(email.toLowerCase().trim(), documento.trim());
   if (existing) {
     return NextResponse.json({ error: 'Ya existe un usuario con ese correo o documento.' }, { status: 409 });
   }
 
-  const result = db.prepare(
+  const result = await db.prepare(
     `INSERT INTO usuarios (nombre, documento, tipo_doc, telefono, email, password, regimen)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(nombre.trim(), documento.trim(), tipoDoc, telefono.trim(),
         email.toLowerCase().trim(), hashPassword(password), regimen ?? null);
 
-  const user = db.prepare(
+  const user = await db.prepare(
     'SELECT id, nombre, email, rol, documento, tipo_doc, telefono, regimen FROM usuarios WHERE id = ?'
   ).get(result.lastInsertRowid) as Record<string, unknown>;
 

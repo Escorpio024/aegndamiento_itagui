@@ -1,9 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Evitar que node:sqlite sea bundleado por Webpack — debe correr en Node.js nativo
-  serverExternalPackages: ['node:sqlite'],
+  // @libsql/client usa módulos nativos, no debe ser bundleado
+  serverExternalPackages: ['@libsql/client'],
   turbopack: {},
+
 
   // Headers de seguridad
   async headers() {

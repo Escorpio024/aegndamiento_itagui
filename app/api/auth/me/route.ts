@@ -6,7 +6,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
 
-  const user = db.prepare(
+  const user = await db.prepare(
     'SELECT id, nombre, email, rol, documento, tipo_doc, telefono, regimen, created_at FROM usuarios WHERE id = ?'
   ).get(session.id);
 

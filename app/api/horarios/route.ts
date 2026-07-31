@@ -5,7 +5,7 @@ import { runSeed } from '@/lib/seed';
 
 // GET /api/horarios?sedeId=&fecha=&admin=true
 export async function GET(req: Request) {
-  runSeed();
+  await runSeed();
   const session = await getSession();
   const { searchParams } = new URL(req.url);
   const sedeId = searchParams.get('sedeId');
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     ORDER BY h.fecha, h.hora_inicio
   `;
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  return NextResponse.json(await db.prepare(query).all(...params));
 }
 
 // POST /api/horarios — slot único (admin)
@@ -42,9 +42,12 @@ export async function POST(req: Request) {
   if (!sedeId || !doctorId || !fecha || !horaInicio || !horaFin)
     return NextResponse.json({ error: 'Todos los campos son obligatorios.' }, { status: 400 });
 
-  const result = db.prepare(
+  const result = await db.prepare(
     'INSERT INTO horarios (sede_id, doctor_id, fecha, hora_inicio, hora_fin) VALUES (?,?,?,?,?)'
   ).run(sedeId, doctorId, fecha, horaInicio, horaFin);
 
-  return NextResponse.json(db.prepare('SELECT * FROM horarios WHERE id=?').get(result.lastInsertRowid), { status: 201 });
+  return NextResponse.json(
+    await db.prepare('SELECT * FROM horarios WHERE id=?').get(result.lastInsertRowid),
+    { status: 201 }
+  );
 }

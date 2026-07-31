@@ -4,12 +4,12 @@ import { getSession, requireAdmin } from '@/lib/auth';
 import { runSeed } from '@/lib/seed';
 
 export async function GET(req: Request) {
-  runSeed();
+  await runSeed();
   const session = await getSession();
   const { searchParams } = new URL(req.url);
   const all = searchParams.get('all') === 'true' && session?.rol === 'admin';
 
-  const rows = db.prepare(
+  const rows = await db.prepare(
     all ? 'SELECT * FROM doctores ORDER BY nombre'
         : 'SELECT * FROM doctores WHERE activo=1 ORDER BY nombre'
   ).all();
@@ -21,7 +21,10 @@ export async function POST(req: Request) {
   const { nombre, especialidad } = await req.json();
   if (!nombre) return NextResponse.json({ error: 'Nombre requerido.' }, { status: 400 });
 
-  const result = db.prepare('INSERT INTO doctores (nombre, especialidad) VALUES (?, ?)')
+  const result = await db.prepare('INSERT INTO doctores (nombre, especialidad) VALUES (?, ?)')
     .run(nombre.trim(), especialidad ?? 'Radiología');
-  return NextResponse.json(db.prepare('SELECT * FROM doctores WHERE id=?').get(result.lastInsertRowid), { status: 201 });
+  return NextResponse.json(
+    await db.prepare('SELECT * FROM doctores WHERE id=?').get(result.lastInsertRowid),
+    { status: 201 }
+  );
 }

@@ -4,19 +4,20 @@ import db from '@/lib/db';
 import { runSeed } from '@/lib/seed';
 
 // Server Component — queries DB directly
-function getProcedimientos() {
+async function getProcedimientos() {
   try {
-    runSeed();
+    await runSeed();
     return db.prepare('SELECT * FROM procedimientos WHERE activo=1 ORDER BY nombre').all();
   } catch { return []; }
 }
 
-function getSedes() {
+async function getSedes() {
   try {
-    runSeed();
+    await runSeed();
     return db.prepare('SELECT * FROM sedes WHERE activa = 1 ORDER BY nombre').all();
   } catch { return []; }
 }
+
 
 const PROC_ICONS: Record<string, string> = {
   craneo:'🧠', torax:'🫁', abdomen:'🫄', urinarias:'💧', senos:'👃',
