@@ -3,6 +3,9 @@ import HeroParticles from '@/components/HeroParticles';
 import db from '@/lib/db';
 import { runSeed } from '@/lib/seed';
 
+// Fuerza renderizado dinámico — evita que Next.js intente conectar a la DB durante el build
+export const dynamic = 'force-dynamic';
+
 // Server Component — queries DB directly
 async function getProcedimientos() {
   try {
@@ -17,6 +20,7 @@ async function getSedes() {
     return db.prepare('SELECT * FROM sedes WHERE activa = 1 ORDER BY nombre').all();
   } catch { return []; }
 }
+
 
 
 const PROC_ICONS: Record<string, string> = {
