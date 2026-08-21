@@ -49,7 +49,27 @@ export async function GET(
     FROM demanda_inducida d
     ${where}
     ORDER BY d.zona, d.municipio, d.apellidos
+    LIMIT 100
   `).all(...queryParams) as any[];
+
+  // ─── Agregar teléfonos de prueba al principio ───────────────────────────
+  if (campana.telefonos_prueba) {
+    const pruebas = campana.telefonos_prueba.split(',').map((t: string) => t.trim()).filter(Boolean);
+    for (const num of pruebas) {
+      rawRows.unshift({
+        documento: 'PRUEBA',
+        nombre: 'Usuario de Prueba',
+        telefonos: num,
+        email: null,
+        observaciones_demanda_inducida: null,
+        observacion: null,
+        datos_especificos: null,
+        zona: 'Prueba',
+        municipio: 'PRUEBA',
+        tipo_examen: 'Prueba'
+      });
+    }
+  }
 
   // ─── Extraer teléfonos de múltiples campos usando Regex ─────────────────
   const rows = [];
