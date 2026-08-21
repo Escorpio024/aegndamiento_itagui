@@ -8,7 +8,7 @@ interface Doctor  { id:number; nombre:string; especialidad:string; activo:number
 interface Horario { id:number; sede_id:number; doctor_id:number; fecha:string; hora_inicio:string; hora_fin:string; disponible:number; sede_nombre:string; doctor_nombre:string; cita_id?:number; cita_estado?:string; paciente_nombre?:string; }
 interface Proc    { id:number; cups:string; nombre:string; modalidad:string; contraste:string; activo:number; }
 interface Cita    { id:number; estado:string; paciente_nombre:string; documento:string; procedimiento_nombre:string; cups:string; sede_nombre:string; fecha:string; hora_inicio:string; hora_fin:string; doctor_nombre:string; created_at:string; }
-interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
+interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; telefonos_prueba:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
 interface Destinatario { nombre:string; telefono:string; email:string; documento:string; zona:string; municipio:string; tipo_examen:string; }
 interface ZonaInfo { nombre:string; total:number; municipios:{ nombre:string; total:number }[]; }
 
@@ -42,7 +42,7 @@ export default function AdminPage() {
 
   // Campaña form
   const [modalCampana, setModalCampana] = useState(false);
-  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[] as string[], filtro_sede_id:'', filtro_estado_cita:'' });
+  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[] as string[], filtro_sede_id:'', filtro_estado_cita:'', telefonos_prueba:'' });
   const [campanaSeleccionada, setCampanaSeleccionada] = useState<Campana|null>(null);
   const [zonas,           setZonas]           = useState<ZonaInfo[]>([]);
   const [contandoDest,    setContandoDest]    = useState(0);
@@ -160,7 +160,7 @@ export default function AdminPage() {
       const r = await api('POST', '/api/campanas', campanaForm);
       toast(`✅ Campaña creada. ${r.total_destinatarios} destinatarios encontrados.`, 'success');
       setModalCampana(false);
-      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[], filtro_sede_id:'', filtro_estado_cita:'' });
+      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[], filtro_sede_id:'', filtro_estado_cita:'', telefonos_prueba:'' });
       setContandoDest(0);
       load();
     } catch (e:any) { toast(e.message, 'error'); }
@@ -568,6 +568,14 @@ export default function AdminPage() {
                   <option value="EMAIL">✉️ Solo Email</option>
                   <option value="AMBOS">📱✉️ SMS + Email</option>
                 </select></div>
+
+              {/* Teléfonos de prueba */}
+              <div className="form-group">
+                <label className="form-label">Teléfonos de prueba (Opcional)
+                  <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>(Separados por coma)</span>
+                </label>
+                <input className="form-control" placeholder="Ej: 3001234567, 3109876543" value={campanaForm.telefonos_prueba} onChange={e => setCampanaForm(f=>({...f,telefonos_prueba:e.target.value}))} />
+              </div>
 
               {/* ── Selector Zona ──────────────────────────────── */}
               <div className="form-group">

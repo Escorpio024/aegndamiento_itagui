@@ -29,11 +29,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Acceso denegado.' }, { status: 403 });
   }
 
+  const body = await req.json();
   const {
     nombre, mensaje_sms, mensaje_email, tipo_canal,
-    filtro_zona, filtro_municipios,       // ← nuevos: zona y lista de municipios
-    filtro_sede_id, filtro_estado_cita,   // ← legacy: filtros por sede/cita
-  } = await req.json();
+    filtro_zona, filtro_municipios,
+    filtro_sede_id, filtro_estado_cita, telefonos_prueba
+  } = body;
 
   if (!nombre || !tipo_canal) {
     return NextResponse.json({ error: 'Nombre y tipo de canal son obligatorios.' }, { status: 400 });
@@ -67,24 +68,19 @@ export async function POST(req: Request) {
 
   const total = Number(countRow?.total ?? 0);
 
-  // Guardar municipios como JSON string
-  const municipiosJson = filtro_municipios ? JSON.stringify(filtro_municipios) : null;
-
-  const r = await db.prepare(`
-    INSERT INTO campanas (nombre, mensaje_sms, mensaje_email, tipo_canal,
-      filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita, total_destinatarios)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const result = await db.prepare(`
+    INSERT INTO campanas (
+      nombre, mensaje_sms, mensaje_email, tipo_canal, estado,
+      filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita, telefonos_prueba,
+      total_destinatarios
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    nombre,
-    mensaje_sms ?? null,
-    mensaje_email ?? null,
-    tipo_canal,
-    filtro_zona ?? null,
-    municipiosJson,
-    filtro_sede_id ?? null,
-    filtro_estado_cita ?? null,
+    nombre, mensaje_sms, mensaje_email, tipo_canal, 'PENDIENTE',
+    filtro_zona || null, JSON.stringify(filtro_municipios) || '[]',
+    filtro_sede_id || null, filtro_estado_cita || null,
+    telefonos_prueba || null,
     total
   );
 
-  return NextResponse.json({ id: r.lastInsertRowid, total_destinatarios: total }, { status: 201 });
+  return NextResponse.json({ id: result.lastInsertRowid, total_destinatarios: total }, { status: 201 });
 }

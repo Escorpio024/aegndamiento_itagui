@@ -52,6 +52,23 @@ export async function POST(
     ${where}
   `).all(...queryParams) as any[];
 
+  // ─── Agregar teléfonos de prueba ────────────────────────────────────────
+  if (campana.telefonos_prueba) {
+    const pruebas = campana.telefonos_prueba.split(',').map((t: string) => t.trim()).filter(Boolean);
+    for (const num of pruebas) {
+      destinatarios.push({
+        numero_identificacion: 'PRUEBA',
+        nombre: 'Usuario de Prueba',
+        telefonos: num, // Forzamos a que entre aquí
+        email: null,
+        observaciones_demanda_inducida: null,
+        observacion: null,
+        datos_especificos: null,
+        municipio: 'PRUEBA'
+      });
+    }
+  }
+
   const ONURIX_CLIENT = process.env.ONURIX_CLIENT ?? '';
   const ONURIX_KEY    = process.env.ONURIX_KEY ?? '';
 
@@ -80,8 +97,8 @@ export async function POST(
             const body = new URLSearchParams({
               client:  ONURIX_CLIENT,
               key:     ONURIX_KEY,
-              number:  numero,
-              message: campana.mensaje_sms,
+              phone:   numero,
+              sms:     campana.mensaje_sms,
             });
 
             const smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {

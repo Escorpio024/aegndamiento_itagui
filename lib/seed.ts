@@ -84,6 +84,7 @@ export async function runSeed(): Promise<void> {
       filtro_municipios    TEXT,
       filtro_sede_id       INTEGER,
       filtro_estado_cita   TEXT,
+      telefonos_prueba     TEXT,
       total_destinatarios  INTEGER DEFAULT 0,
       enviados_sms         INTEGER DEFAULT 0,
       enviados_email       INTEGER DEFAULT 0,
@@ -100,6 +101,9 @@ export async function runSeed(): Promise<void> {
   }
   if (!colNames.includes('filtro_municipios')) {
     await db.exec('ALTER TABLE campanas ADD COLUMN filtro_municipios TEXT');
+  }
+  if (!colNames.includes('telefonos_prueba')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN telefonos_prueba TEXT');
   }
 
   await db.exec(`
