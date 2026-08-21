@@ -19,6 +19,7 @@ export async function POST(
   const campana = await db.prepare('SELECT * FROM campanas WHERE id = ?').get(id) as any;
   if (!campana) return NextResponse.json({ error: 'Campaña no encontrada.' }, { status: 404 });
   if (campana.estado === 'ENVIADA') return NextResponse.json({ error: 'Esta campaña ya fue enviada.' }, { status: 400 });
+  if (campana.estado === 'ENVIANDO') return NextResponse.json({ error: 'Esta campaña ya está en proceso de envío. Espera o resetea su estado.' }, { status: 400 });
 
   // Actualizar estado a ENVIANDO
   await db.prepare("UPDATE campanas SET estado = 'ENVIANDO' WHERE id = ?").run(id);

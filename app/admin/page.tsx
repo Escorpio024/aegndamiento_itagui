@@ -212,11 +212,34 @@ export default function AdminPage() {
   const enviarCampana = async (c: Campana) => {
     if (!confirm(`¿Enviar la campaña "${c.nombre}" a ${c.total_destinatarios} destinatarios? Esta acción no se puede deshacer.`)) return;
     setEnviando(true);
+    toast('⏳ Enviando... esto puede tardar hasta 60 segundos. No cierres la ventana.', 'info');
     try {
-      const r = await api('POST', `/api/campanas/${c.id}/enviar`, {});
-      toast(`✅ Campaña enviada. SMS: ${r.enviados_sms} | Email: ${r.enviados_email}`, 'success');
+      // Timeout generoso para no cortar mientras Vercel envía los SMS
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 65000);
+      const r = await fetch(`/api/campanas/${c.id}/enviar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al enviar');
+      toast(`✅ Campaña enviada. SMS: ${d.enviados_sms} | Email: ${d.enviados_email}`, 'success');
+      if (d.errores?.length > 0) {
+        console.warn('Errores de envío:', d.errores);
+      }
       load();
-    } catch (e:any) { toast(e.message, 'error'); }
+    } catch (e:any) {
+      if (e.name === 'AbortError') {
+        // El servidor siguió trabajando pero el navegador agotó el tiempo
+        toast('⚠️ El envío sigue en proceso en el servidor. Recarga en 30 segundos para ver el resultado.', 'info');
+        setTimeout(() => load(), 30000);
+      } else {
+        toast(e.message, 'error');
+      }
+    }
     finally { setEnviando(false); }
   };
 
@@ -507,9 +530,20 @@ export default function AdminPage() {
 
                       <div className="campana-actions">
                         <button className="btn btn-outline btn-sm" onClick={() => verDestinatarios(c)}>👥 Ver destinatarios</button>
-                        {c.estado !== 'ENVIADA' && (
+                        {c.estado === 'PENDIENTE' && (
                           <button className="btn btn-primary btn-sm" disabled={enviando} onClick={() => enviarCampana(c)}>
                             {enviando ? '⏳ Enviando...' : '🚀 Enviar ahora'}
+                          </button>
+                        )}
+                        {c.estado === 'ENVIANDO' && (
+                          <button className="btn btn-outline btn-sm" style={{ borderColor: 'rgba(255,165,0,0.5)', color: '#ffa500' }}
+                            disabled={enviando}
+                            onClick={async () => {
+                              if (!confirm('Esta campaña quedó atascada. ¿Resetear su estado para poder reenviarla?')) return;
+                              await fetch(`/api/campanas/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' } });
+                              load();
+                            }}>
+                            ⚠️ Resetear estado
                           </button>
                         )}
                         <button 

@@ -21,3 +21,25 @@ export async function DELETE(
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+// PATCH /api/campanas/[id] — resetear estado a PENDIENTE (para reintentar envíos trabados)
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ error: 'Acceso denegado.' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  
+  try {
+    await db.prepare("UPDATE campanas SET estado = 'PENDIENTE' WHERE id = ?").run(id);
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
