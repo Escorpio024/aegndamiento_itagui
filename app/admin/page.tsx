@@ -685,9 +685,9 @@ export default function AdminPage() {
               {(campanaForm.tipo_canal === 'SMS' || campanaForm.tipo_canal === 'AMBOS') && (
                 <div className="form-group">
                   <label className="form-label">Mensaje SMS *
-                    <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.8rem', marginLeft:6 }}>({campanaForm.mensaje_sms.length}/160)</span>
+                    <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.8rem', marginLeft:6 }}>({campanaForm.mensaje_sms.length}/319)</span>
                   </label>
-                  <textarea className="form-control" rows={3} maxLength={160}
+                  <textarea className="form-control" rows={3} maxLength={319}
                     placeholder="Ej: Estimado paciente, le recordamos su cita médica. Para más info llame al 3609000."
                     value={campanaForm.mensaje_sms} onChange={e => setCampanaForm(f=>({...f,mensaje_sms:e.target.value}))} style={{ resize:'vertical', minHeight:80 }} />
                 </div>
