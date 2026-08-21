@@ -140,11 +140,16 @@ export async function POST(
             const respText = await smsRes.text();
             let respJson: any = {};
             try { respJson = JSON.parse(respText); } catch {}
-            if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || respJson.status === 1 || !respJson.status)) {
+
+            // Onurix: error field ausente o = 0 significa éxito.
+            // error > 0 (ej: 1000, 1001) significa fallo.
+            const onurixError = respJson.error !== undefined && respJson.error !== 0 && respJson.error !== null;
+
+            if (smsRes.ok && !onurixError) {
               enviados_sms++;
               await db.prepare('UPDATE demanda_inducida SET sms_enviado = 1 WHERE numero_identificacion = ?').run(dest.numero_identificacion).catch(() => {});
             } else {
-              errores.push(`Error ${dest.nombre}: ${respJson.msg || respJson.error || respText}`);
+              errores.push(`Error ${dest.nombre} (${numero}): [HTTP ${smsRes.status}] ${respJson.msg || respJson.error || respText}`);
             }
           } else {
             console.log(`[SMS DEV] → ${numero} (${dest.nombre}): ${campana.mensaje_sms}`);
