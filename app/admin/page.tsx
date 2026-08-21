@@ -220,6 +220,15 @@ export default function AdminPage() {
     finally { setEnviando(false); }
   };
 
+  const eliminarCampana = async (c: Campana) => {
+    if (!confirm(`¿Estás seguro de eliminar la campaña "${c.nombre}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await api('DELETE', `/api/campanas/${c.id}`);
+      toast('🗑️ Campaña eliminada', 'success');
+      load();
+    } catch (e:any) { toast(e.message, 'error'); }
+  };
+
   return (
     <div className="admin-layout">
       {/* Sidebar */}
@@ -503,6 +512,13 @@ export default function AdminPage() {
                             {enviando ? '⏳ Enviando...' : '🚀 Enviar ahora'}
                           </button>
                         )}
+                        <button 
+                          className="btn btn-outline btn-sm" 
+                          style={{ borderColor: 'rgba(255,68,68,0.3)', color: '#ff4444' }} 
+                          onClick={() => eliminarCampana(c)}
+                        >
+                          🗑️ Eliminar
+                        </button>
                       </div>
                     </div>
                   ))}
