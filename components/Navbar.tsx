@@ -53,7 +53,10 @@ export default function Navbar() {
               </span>
               {user.rol === 'admin'
                 ? <Link href="/admin" className="btn btn-outline btn-sm">⚙️ Admin</Link>
-                : <Link href="/mis-citas" className="btn btn-outline btn-sm">📋 Mis Citas</Link>}
+                : <>
+                    <Link href="/mis-citas" className="btn btn-outline btn-sm">📋 Mis Citas</Link>
+                    <Link href="/perfil" className="btn btn-outline btn-sm">👤 Perfil</Link>
+                  </>}
               <button onClick={logout} className="btn btn-ghost btn-sm">Salir</button>
             </>
           ) : (

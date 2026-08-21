@@ -8,13 +8,13 @@ import { runSeed } from '@/lib/seed';
 // ─── POST /api/auth/login ─────────────────────────────────────────────
 export async function POST(req: Request) {
   await runSeed();
-  const { email, password } = await req.json();
-  if (!email || !password) {
-    return NextResponse.json({ error: 'Correo y contraseña requeridos.' }, { status: 400 });
+  const { documento, password } = await req.json();
+  if (!documento || !password) {
+    return NextResponse.json({ error: 'Cédula y contraseña son requeridas.' }, { status: 400 });
   }
 
-  const user = await db.prepare('SELECT * FROM usuarios WHERE email = ?')
-    .get(email.toLowerCase().trim()) as Record<string, unknown> | null;
+  const user = await db.prepare('SELECT * FROM usuarios WHERE documento = ?')
+    .get(documento.trim()) as Record<string, unknown> | null;
 
   if (!user || !verifyPassword(password, user.password as string)) {
     return NextResponse.json({ error: 'Credenciales inválidas.' }, { status: 401 });

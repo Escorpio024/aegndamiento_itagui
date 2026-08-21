@@ -15,10 +15,10 @@ function LoginContent() {
   const [error, setError]     = useState('');
 
   // Login form
-  const [loginData, setLoginData]   = useState({ email:'', password:'' });
+  const [loginData, setLoginData]   = useState({ documento:'', password:'' });
   // Register form
   const [regData, setRegData] = useState({
-    nombre:'', documento:'', tipoDoc:'CC', telefono:'', email:'', password:'', regimen:'CONTRIBUTIVO'
+    nombre:'', documento:'', tipoDoc:'CC', telefono:'', email:'', regimen:'CONTRIBUTIVO'
   });
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -43,13 +43,15 @@ function LoginContent() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setLoading(true);
     try {
+      // La contraseña por defecto es el número de documento
+      const payload = { ...regData, password: regData.documento };
       const r = await fetch('/api/auth/register', {
         method:'POST', headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify(regData),
+        body: JSON.stringify(payload),
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error); return; }
-      toast('¡Cuenta creada exitosamente!', 'success');
+      toast('¡Cuenta creada! Tu contraseña inicial es tu número de cédula.', 'success');
       if (data.user?.rol === 'admin') {
         window.location.href = '/admin';
       } else {
@@ -81,14 +83,15 @@ function LoginContent() {
         {tab === 'login' && (
           <form className="auth-form" onSubmit={handleLogin}>
             <div className="form-group">
-              <label className="form-label">Correo electrónico <span className="req">*</span></label>
-              <input type="email" className="form-control" placeholder="correo@ejemplo.com"
-                value={loginData.email} onChange={e => setLoginData(d => ({ ...d, email:e.target.value }))} required />
+              <label className="form-label">Número de cédula <span className="req">*</span></label>
+              <input type="text" className="form-control" placeholder="1234567890"
+                value={loginData.documento} onChange={e => setLoginData(d => ({ ...d, documento:e.target.value }))} required autoFocus />
             </div>
             <div className="form-group">
               <label className="form-label">Contraseña <span className="req">*</span></label>
               <input type="password" className="form-control" placeholder="••••••••"
                 value={loginData.password} onChange={e => setLoginData(d => ({ ...d, password:e.target.value }))} required />
+              <p style={{ fontSize:'0.78rem', color:'var(--text-3)', marginTop:4 }}>Si es tu primer acceso, tu contraseña es tu número de cédula.</p>
             </div>
             <button type="submit" className={`btn btn-primary btn-block btn-lg${loading?' btn-loading':''}`} disabled={loading}>
               {loading ? <><span className="spinner spinner-sm" /> Iniciando sesión...</> : '→ Iniciar sesión'}
@@ -131,14 +134,12 @@ function LoginContent() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Correo electrónico <span className="req">*</span></label>
-              <input type="email" className="form-control" placeholder="correo@ejemplo.com"
-                value={regData.email} onChange={e => setRegData(d => ({ ...d, email:e.target.value }))} required />
+              <label className="form-label">Correo electrónico</label>
+              <input type="email" className="form-control" placeholder="correo@ejemplo.com (opcional)"
+                value={regData.email} onChange={e => setRegData(d => ({ ...d, email:e.target.value }))} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Contraseña <span className="req">*</span></label>
-              <input type="password" className="form-control" placeholder="Mínimo 6 caracteres"
-                value={regData.password} onChange={e => setRegData(d => ({ ...d, password:e.target.value }))} required minLength={6} />
+            <div className="alert" style={{ background:'rgba(var(--accent-rgb),0.08)', border:'1px solid rgba(var(--accent-rgb),0.2)', borderRadius:8, padding:'10px 14px', fontSize:'0.82rem', color:'var(--text-2)', marginBottom:12 }}>
+              🔑 Tu contraseña inicial será tu número de cédula. Podrás cambiarla desde tu perfil.
             </div>
             <button type="submit" className={`btn btn-primary btn-block btn-lg${loading?' btn-loading':''}`} disabled={loading}>
               {loading ? <><span className="spinner spinner-sm" /> Creando cuenta...</> : '✓ Crear cuenta'}
