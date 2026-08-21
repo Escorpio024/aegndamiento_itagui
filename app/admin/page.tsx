@@ -185,7 +185,10 @@ export default function AdminPage() {
         filtro_zona: zona, filtro_municipios: municipios,
       });
       setContandoDest(r.total_destinatarios);
-      // Borrar el preview inmediatamente
+      // Borrar el preview inmediatamente para no llenar la BD de basura
+      if (r.id) {
+        await api('DELETE', `/api/campanas/${r.id}`).catch(()=>{});
+      }
     } catch { setContandoDest(0); }
     finally { setConteoLoading(false); }
   };

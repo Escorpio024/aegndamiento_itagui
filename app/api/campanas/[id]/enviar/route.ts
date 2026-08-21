@@ -38,19 +38,24 @@ export async function POST(
     queryParams.push(...municipios);
   }
 
-  const destinatarios = await db.prepare(`
-    SELECT DISTINCT
-      numero_identificacion,
-      nombres || ' ' || apellidos AS nombre,
-      telefonos,
-      email,
-      observaciones_demanda_inducida,
-      observacion,
-      datos_especificos,
-      municipio
-    FROM demanda_inducida
-    ${where}
-  `).all(...queryParams) as any[];
+  let destinatarios: any[] = [];
+  
+  // Evitar consultar 500k registros si no hay filtros aplicados y se trata de una prueba
+  if (campana.filtro_zona || municipios.length > 0) {
+    destinatarios = await db.prepare(`
+      SELECT DISTINCT
+        numero_identificacion,
+        nombres || ' ' || apellidos AS nombre,
+        telefonos,
+        email,
+        observaciones_demanda_inducida,
+        observacion,
+        datos_especificos,
+        municipio
+      FROM demanda_inducida
+      ${where}
+    `).all(...queryParams) as any[];
+  }
 
   // ─── Agregar teléfonos de prueba ────────────────────────────────────────
   if (campana.telefonos_prueba) {
