@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 
-// GET /api/campanas/[id]/destinatarios — lista de usuarios destino
+// GET /api/campanas/[id]/destinatarios — usuarios filtrados por zona/municipio
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -17,19 +17,35 @@ export async function GET(
   const campana = await db.prepare('SELECT * FROM campanas WHERE id = ?').get(id) as any;
   if (!campana) return NextResponse.json({ error: 'Campaña no encontrada.' }, { status: 404 });
 
+  // Parsear municipios (guardados como JSON string)
+  let municipios: string[] = [];
+  try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
+
   const queryParams: any[] = [];
-  let where = 'WHERE 1=1';
-  if (campana.filtro_sede_id) { where += ' AND c.sede_id = ?'; queryParams.push(campana.filtro_sede_id); }
-  if (campana.filtro_estado_cita) { where += ' AND c.estado = ?'; queryParams.push(campana.filtro_estado_cita); }
+  let where = "WHERE d.telefonos IS NOT NULL AND d.telefonos != ''";
+
+  if (campana.filtro_zona) {
+    where += ' AND d.zona = ?';
+    queryParams.push(campana.filtro_zona);
+  }
+  if (municipios.length > 0) {
+    const placeholders = municipios.map(() => '?').join(',');
+    where += ` AND d.municipio IN (${placeholders})`;
+    queryParams.push(...municipios);
+  }
 
   const rows = await db.prepare(`
-    SELECT DISTINCT u.id, u.nombre, u.telefono, u.email, u.documento,
-      s.nombre AS sede_nombre
-    FROM citas c
-    JOIN usuarios u ON u.id = c.usuario_id
-    JOIN sedes s ON s.id = c.sede_id
+    SELECT
+      d.numero_identificacion AS documento,
+      d.nombres || ' ' || d.apellidos AS nombre,
+      d.telefonos AS telefono,
+      d.email,
+      d.zona,
+      d.municipio,
+      d.tipo_examen
+    FROM demanda_inducida d
     ${where}
-    ORDER BY u.nombre
+    ORDER BY d.zona, d.municipio, d.apellidos
   `).all(...queryParams);
 
   return NextResponse.json(rows);

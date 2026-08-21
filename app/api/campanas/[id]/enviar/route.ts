@@ -21,76 +21,103 @@ export async function POST(
   // Actualizar estado a ENVIANDO
   await db.prepare("UPDATE campanas SET estado = 'ENVIANDO' WHERE id = ?").run(id);
 
+  // ─── Obtener destinatarios de demanda_inducida ─────────────────
+  let municipios: string[] = [];
+  try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
+
   const queryParams: any[] = [];
-  let where = 'WHERE 1=1';
-  if (campana.filtro_sede_id) { where += ' AND c.sede_id = ?'; queryParams.push(campana.filtro_sede_id); }
-  if (campana.filtro_estado_cita) { where += ' AND c.estado = ?'; queryParams.push(campana.filtro_estado_cita); }
+  let where = "WHERE telefonos IS NOT NULL AND telefonos != ''";
+
+  if (campana.filtro_zona) {
+    where += ' AND zona = ?';
+    queryParams.push(campana.filtro_zona);
+  }
+  if (municipios.length > 0) {
+    const placeholders = municipios.map(() => '?').join(',');
+    where += ` AND municipio IN (${placeholders})`;
+    queryParams.push(...municipios);
+  }
 
   const destinatarios = await db.prepare(`
-    SELECT DISTINCT u.id, u.nombre, u.telefono, u.email
-    FROM citas c
-    JOIN usuarios u ON u.id = c.usuario_id
+    SELECT DISTINCT
+      numero_identificacion,
+      nombres || ' ' || apellidos AS nombre,
+      telefonos,
+      email,
+      municipio
+    FROM demanda_inducida
     ${where}
   `).all(...queryParams) as any[];
+
+  const ONURIX_CLIENT = process.env.ONURIX_CLIENT ?? '';
+  const ONURIX_KEY    = process.env.ONURIX_KEY ?? '';
 
   let enviados_sms = 0;
   let enviados_email = 0;
   const errores: string[] = [];
 
   for (const dest of destinatarios) {
-    // ── SMS ─────────────────────────────────────────
-    if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms && dest.telefono) {
-      try {
-        const ONURIX_CLIENT = process.env.ONURIX_CLIENT ?? '';
-        const ONURIX_KEY    = process.env.ONURIX_KEY ?? '';
+    // ── SMS ─────────────────────────────────────────────────────────
+    if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms) {
+      // El campo telefonos puede tener múltiples números separados por coma o /
+      const telefonos: string[] = String(dest.telefonos ?? '')
+        .split(/[,\/;]+/)
+        .map((t: string) => t.trim())
+        .filter(Boolean);
 
-        if (ONURIX_CLIENT && ONURIX_KEY) {
-          // Normalizar número: quitar espacios/guiones y agregar prefijo Colombia (57) si no lo tiene
-          let numero = String(dest.telefono).replace(/[\s\-\(\)]/g, '');
-          if (!numero.startsWith('57')) numero = `57${numero}`;
+      for (const telRaw of telefonos) {
+        try {
+          // Normalizar: solo dígitos, agregar 57 si es colombiano (10 dígitos)
+          let numero = telRaw.replace(/\D/g, '');
+          if (numero.length === 10) numero = `57${numero}`;
+          if (numero.length < 10) continue; // inválido
 
-          const body = new URLSearchParams({
-            client:  ONURIX_CLIENT,
-            key:     ONURIX_KEY,
-            number:  numero,
-            message: campana.mensaje_sms,
-          });
+          if (ONURIX_CLIENT && ONURIX_KEY) {
+            const body = new URLSearchParams({
+              client:  ONURIX_CLIENT,
+              key:     ONURIX_KEY,
+              number:  numero,
+              message: campana.mensaje_sms,
+            });
 
-          const smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Accept':       'application/json',
-            },
-            body: body.toString(),
-          });
+            const smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept':       'application/json',
+              },
+              body: body.toString(),
+            });
 
-          const respText = await smsRes.text();
-          let respJson: any = {};
-          try { respJson = JSON.parse(respText); } catch { /* respuesta no-JSON */ }
+            const respText = await smsRes.text();
+            let respJson: any = {};
+            try { respJson = JSON.parse(respText); } catch { /* no-JSON */ }
 
-          if (smsRes.ok && (respJson.status === 'success' || respJson.status === 'ok' || smsRes.status === 200)) {
-            enviados_sms++;
+            if (smsRes.ok) {
+              enviados_sms++;
+              // Marcar como enviado en la BD
+              await db.prepare(
+                'UPDATE demanda_inducida SET sms_enviado = 1 WHERE numero_identificacion = ?'
+              ).run(dest.numero_identificacion).catch(() => {});
+            } else {
+              errores.push(`SMS ${dest.nombre} (${numero}): ${respJson.message ?? respText}`);
+            }
           } else {
-            errores.push(`SMS ${dest.nombre} (${numero}): ${respJson.message ?? respText}`);
+            // Modo desarrollo — sin credenciales
+            console.log(`[SMS DEV] → ${numero} (${dest.nombre} - ${dest.municipio}): ${campana.mensaje_sms}`);
+            enviados_sms++;
           }
-        } else {
-          // Sin credenciales — modo desarrollo
-          console.log(`[SMS DEV] → ${dest.telefono}: ${campana.mensaje_sms}`);
-          enviados_sms++;
+        } catch (e: any) {
+          errores.push(`SMS ${dest.nombre}: ${e.message}`);
         }
-      } catch (e: any) {
-        errores.push(`SMS ${dest.nombre}: ${e.message}`);
       }
     }
 
-
-    // ── Email ────────────────────────────────────────
+    // ── Email ────────────────────────────────────────────────────────
     if ((campana.tipo_canal === 'EMAIL' || campana.tipo_canal === 'AMBOS') && campana.mensaje_email && dest.email) {
       try {
-        // Aquí irá la integración de email (SMTP / SendGrid / etc.)
-        // Por ahora se registra el log para cuando se configure el proveedor
-        console.log(`[EMAIL DEV] → ${dest.email}: ${campana.mensaje_email}`);
+        // TODO: integrar proveedor de email (SendGrid / Nodemailer)
+        console.log(`[EMAIL DEV] → ${dest.email} (${dest.nombre}): ${campana.mensaje_email}`);
         enviados_email++;
       } catch (e: any) {
         errores.push(`Email ${dest.nombre}: ${e.message}`);
@@ -98,18 +125,19 @@ export async function POST(
     }
   }
 
-  // Actualizar estadísticas de campaña
+  // ─── Actualizar estadísticas ────────────────────────────────────
   await db.prepare(`
     UPDATE campanas
-    SET estado = 'ENVIADA', enviados_sms = ?, enviados_email = ?, sent_at = datetime('now','localtime')
+    SET estado = 'ENVIADA', enviados_sms = ?, enviados_email = ?,
+        total_destinatarios = ?, sent_at = datetime('now','localtime')
     WHERE id = ?
-  `).run(enviados_sms, enviados_email, id);
+  `).run(enviados_sms, enviados_email, destinatarios.length, id);
 
   return NextResponse.json({
     ok: true,
     total: destinatarios.length,
     enviados_sms,
     enviados_email,
-    errores: errores.slice(0, 20),
+    errores: errores.slice(0, 30),
   });
 }

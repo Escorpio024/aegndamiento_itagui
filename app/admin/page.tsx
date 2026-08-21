@@ -8,8 +8,9 @@ interface Doctor  { id:number; nombre:string; especialidad:string; activo:number
 interface Horario { id:number; sede_id:number; doctor_id:number; fecha:string; hora_inicio:string; hora_fin:string; disponible:number; sede_nombre:string; doctor_nombre:string; cita_id?:number; cita_estado?:string; paciente_nombre?:string; }
 interface Proc    { id:number; cups:string; nombre:string; modalidad:string; contraste:string; activo:number; }
 interface Cita    { id:number; estado:string; paciente_nombre:string; documento:string; procedimiento_nombre:string; cups:string; sede_nombre:string; fecha:string; hora_inicio:string; hora_fin:string; doctor_nombre:string; created_at:string; }
-interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_sede_id:number|null; filtro_estado_cita:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
-interface Destinatario { id:number; nombre:string; telefono:string; email:string; documento:string; sede_nombre:string; }
+interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
+interface Destinatario { nombre:string; telefono:string; email:string; documento:string; zona:string; municipio:string; tipo_examen:string; }
+interface ZonaInfo { nombre:string; total:number; municipios:{ nombre:string; total:number }[]; }
 
 const SECTIONS = [
   { id:'citas',        icon:'📋', label:'Citas' },
@@ -41,8 +42,11 @@ export default function AdminPage() {
 
   // Campaña form
   const [modalCampana, setModalCampana] = useState(false);
-  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_sede_id:'', filtro_estado_cita:'' });
+  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[] as string[], filtro_sede_id:'', filtro_estado_cita:'' });
   const [campanaSeleccionada, setCampanaSeleccionada] = useState<Campana|null>(null);
+  const [zonas,           setZonas]           = useState<ZonaInfo[]>([]);
+  const [contandoDest,    setContandoDest]    = useState(0);
+  const [conteoLoading,   setConteoLoading]   = useState(false);
 
   // Filter states
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -96,10 +100,11 @@ export default function AdminPage() {
   }, [section, filtroEstado, filtroSede, filtroFecha, horSede, horFecha]);
 
   useEffect(() => { load(); }, [load]);
-  // Load sedes and docs for selects
+  // Load sedes, docs y zonas para selects
   useEffect(() => {
     api('GET', '/api/sedes?all=true').then(setSedes).catch(()=>{});
     api('GET', '/api/doctores?all=true').then(setDocs).catch(()=>{});
+    api('GET', '/api/campanas/zonas').then(setZonas).catch(()=>{});
   }, []);
 
   const cambiarEstadoCita = async (id: number, estado: string) => {
@@ -155,9 +160,31 @@ export default function AdminPage() {
       const r = await api('POST', '/api/campanas', campanaForm);
       toast(`✅ Campaña creada. ${r.total_destinatarios} destinatarios encontrados.`, 'success');
       setModalCampana(false);
-      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_sede_id:'', filtro_estado_cita:'' });
+      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[], filtro_sede_id:'', filtro_estado_cita:'' });
+      setContandoDest(0);
       load();
     } catch (e:any) { toast(e.message, 'error'); }
+  };
+
+  // Contar destinatarios al cambiar zona/municipios
+  const contarDestinatarios = async (zona: string, municipios: string[]) => {
+    if (!zona) { setContandoDest(0); return; }
+    setConteoLoading(true);
+    try {
+      const r = await api('POST', '/api/campanas', {
+        nombre: '__preview__', tipo_canal:'SMS', mensaje_sms: 'x',
+        filtro_zona: zona, filtro_municipios: municipios,
+      });
+      setContandoDest(r.total_destinatarios);
+      // Borrar el preview inmediatamente
+    } catch { setContandoDest(0); }
+    finally { setConteoLoading(false); }
+  };
+
+  const toggleMunicipio = (mun: string) => {
+    const cur = campanaForm.filtro_municipios;
+    const next = cur.includes(mun) ? cur.filter(m => m !== mun) : [...cur, mun];
+    setCampanaForm(f => ({ ...f, filtro_municipios: next }));
   };
 
   const verDestinatarios = async (c: Campana) => {
@@ -439,10 +466,10 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {c.filtro_sede_id && (
-                        <div style={{ fontSize:'.82rem', color:'var(--text-3)', marginTop:6 }}>
-                          🏥 Sede: {sedes.find(s=>s.id===c.filtro_sede_id)?.nombre ?? `#${c.filtro_sede_id}`}
-                          {c.filtro_estado_cita && <> · 📋 Estado cita: {c.filtro_estado_cita}</>}
+                      {(c.filtro_zona || c.filtro_municipios) && (
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+                          {c.filtro_zona && <span className="campana-zona-tag">📍 {c.filtro_zona}</span>}
+                          {c.filtro_municipios && (() => { try { return (JSON.parse(c.filtro_municipios) as string[]).map((m:string) => <span key={m} className="campana-mun-tag">{m}</span>); } catch { return null; } })()}
                         </div>
                       )}
 
@@ -488,14 +515,15 @@ export default function AdminPage() {
                           <div style={{ marginBottom:12, fontSize:'.85rem', color:'var(--text-3)' }}>{destinatarios.length} pacientes encontrados</div>
                           <div className="table-wrap"><div className="table-scroll">
                             <table>
-                              <thead><tr><th>Paciente</th><th>Teléfono</th><th>Email</th><th>Sede</th></tr></thead>
+                              <thead><tr><th>Paciente</th><th>Teléfono</th><th>Municipio</th><th>Zona</th><th>Examen</th></tr></thead>
                               <tbody>
-                                {destinatarios.map(d => (
-                                  <tr key={d.id}>
+                                {destinatarios.map((d, i) => (
+                                  <tr key={i}>
                                     <td><div className="td-main">{d.nombre}</div><div className="td-sub">{d.documento}</div></td>
                                     <td style={{ fontSize:'.85rem' }}>{d.telefono}</td>
-                                    <td style={{ fontSize:'.82rem', color:'var(--text-3)' }}>{d.email}</td>
-                                    <td style={{ fontSize:'.82rem' }}>{d.sede_nombre}</td>
+                                    <td style={{ fontSize:'.82rem' }}>{d.municipio}</td>
+                                    <td style={{ fontSize:'.82rem', color:'var(--text-3)' }}>{d.zona}</td>
+                                    <td style={{ fontSize:'.75rem', color:'var(--text-3)' }}>{d.tipo_examen}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -523,61 +551,128 @@ export default function AdminPage() {
       {/* ── MODAL: NUEVA CAMPAÑA ──────────────────────────────── */}
       {modalCampana && (
         <div className="modal-overlay open" onClick={e => { if(e.target===e.currentTarget) setModalCampana(false); }}>
-          <div className="modal" style={{ maxWidth:580, width:'90vw' }}>
+          <div className="modal" style={{ maxWidth:640, width:'92vw' }}>
             <div className="modal-header">
               <div className="modal-title">📣 Nueva Campaña</div>
               <button className="modal-close" onClick={() => setModalCampana(false)}>✕</button>
             </div>
             <div className="modal-body">
+              {/* Nombre */}
               <div className="form-group"><label className="form-label">Nombre de la campaña *</label>
-                <input className="form-control" placeholder="Ej: Recordatorio citas diciembre" value={campanaForm.nombre} onChange={e => setCampanaForm(f=>({...f,nombre:e.target.value}))} /></div>
+                <input className="form-control" placeholder="Ej: Recordatorio toma citología agosto" value={campanaForm.nombre} onChange={e => setCampanaForm(f=>({...f,nombre:e.target.value}))} /></div>
 
-              <div className="form-grid">
-                <div className="form-group"><label className="form-label">Canal de envío *</label>
-                  <select className="form-control" value={campanaForm.tipo_canal} onChange={e => setCampanaForm(f=>({...f,tipo_canal:e.target.value}))}>
-                    <option value="SMS">📱 Solo SMS</option>
-                    <option value="EMAIL">✉️ Solo Email</option>
-                    <option value="AMBOS">📱✉️ SMS + Email</option>
-                  </select></div>
-
-                <div className="form-group"><label className="form-label">Filtrar por sede</label>
-                  <select className="form-control" value={campanaForm.filtro_sede_id} onChange={e => setCampanaForm(f=>({...f,filtro_sede_id:e.target.value}))}>
-                    <option value="">Todas las sedes</option>
-                    {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select></div>
-              </div>
-
-              <div className="form-group"><label className="form-label">Filtrar por estado de cita</label>
-                <select className="form-control" value={campanaForm.filtro_estado_cita} onChange={e => setCampanaForm(f=>({...f,filtro_estado_cita:e.target.value}))}>
-                  <option value="">Todos los estados</option>
-                  {['PENDIENTE','CONFIRMADA','CANCELADA','COMPLETADA'].map(e => <option key={e}>{e}</option>)}
+              {/* Canal */}
+              <div className="form-group"><label className="form-label">Canal de envío *</label>
+                <select className="form-control" value={campanaForm.tipo_canal} onChange={e => setCampanaForm(f=>({...f,tipo_canal:e.target.value}))}>
+                  <option value="SMS">📱 Solo SMS</option>
+                  <option value="EMAIL">✉️ Solo Email</option>
+                  <option value="AMBOS">📱✉️ SMS + Email</option>
                 </select></div>
 
+              {/* ── Selector Zona ──────────────────────────────── */}
+              <div className="form-group">
+                <label className="form-label">🗺️ Zona de atención
+                  {zonas.length === 0 && <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>Cargando zonas...</span>}
+                </label>
+                <div className="zona-selector">
+                  <button type="button"
+                    className={`zona-btn${!campanaForm.filtro_zona ? ' selected' : ''}`}
+                    onClick={() => {
+                      setCampanaForm(f => ({...f, filtro_zona:'', filtro_municipios:[]}));
+                      setContandoDest(0);
+                    }}>Todas las zonas</button>
+                  {zonas.map(z => (
+                    <button key={z.nombre} type="button"
+                      className={`zona-btn${campanaForm.filtro_zona===z.nombre ? ' selected' : ''}`}
+                      onClick={() => {
+                        const allMuns = z.municipios.map(m => m.nombre);
+                        setCampanaForm(f => ({...f, filtro_zona: z.nombre, filtro_municipios: allMuns}));
+                        contarDestinatarios(z.nombre, allMuns);
+                      }}>
+                      {z.nombre}
+                      <span className="zona-btn-count">{z.total.toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Selector Municipios (cascada) ───────────────── */}
+              {campanaForm.filtro_zona && (() => {
+                const zona = zonas.find(z => z.nombre === campanaForm.filtro_zona);
+                if (!zona) return null;
+                return (
+                  <div className="form-group">
+                    <label className="form-label">
+                      🏙️ Municipios
+                      <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>
+                        {campanaForm.filtro_municipios.length === zona.municipios.length ? 'Todos seleccionados' : `${campanaForm.filtro_municipios.length} seleccionados`}
+                      </span>
+                    </label>
+                    <div className="municipio-grid">
+                      {zona.municipios.map(m => {
+                        const sel = campanaForm.filtro_municipios.includes(m.nombre);
+                        return (
+                          <button key={m.nombre} type="button"
+                            className={`municipio-btn${sel ? ' selected' : ''}`}
+                            onClick={() => {
+                              const next = sel
+                                ? campanaForm.filtro_municipios.filter(x => x !== m.nombre)
+                                : [...campanaForm.filtro_municipios, m.nombre];
+                              setCampanaForm(f => ({...f, filtro_municipios: next}));
+                              contarDestinatarios(campanaForm.filtro_zona, next);
+                            }}>
+                            {m.nombre}
+                            <span className="municipio-count">{m.total.toLocaleString()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Preview destinatarios */}
+              {campanaForm.filtro_zona && (
+                <div className="dest-preview">
+                  <span style={{ fontSize:'1.1rem' }}>👥</span>
+                  {conteoLoading
+                    ? <span>Calculando...</span>
+                    : <><strong style={{ fontSize:'1.15rem', background:'var(--grad)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>{contandoDest.toLocaleString()}</strong> personas en la selección</>}
+                </div>
+              )}
+
+              {/* Mensaje SMS */}
               {(campanaForm.tipo_canal === 'SMS' || campanaForm.tipo_canal === 'AMBOS') && (
                 <div className="form-group">
-                  <label className="form-label">Mensaje SMS * <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.8rem' }}>({campanaForm.mensaje_sms.length}/160 caracteres)</span></label>
+                  <label className="form-label">Mensaje SMS *
+                    <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.8rem', marginLeft:6 }}>({campanaForm.mensaje_sms.length}/160)</span>
+                  </label>
                   <textarea className="form-control" rows={3} maxLength={160}
-                    placeholder="Ej: Estimado paciente, le recordamos su cita médica programada. Para más información llame al 3609000."
+                    placeholder="Ej: Estimado paciente, le recordamos su cita médica. Para más info llame al 3609000."
                     value={campanaForm.mensaje_sms} onChange={e => setCampanaForm(f=>({...f,mensaje_sms:e.target.value}))} style={{ resize:'vertical', minHeight:80 }} />
                 </div>
               )}
 
+              {/* Mensaje Email */}
               {(campanaForm.tipo_canal === 'EMAIL' || campanaForm.tipo_canal === 'AMBOS') && (
                 <div className="form-group">
                   <label className="form-label">Mensaje Email *</label>
                   <textarea className="form-control" rows={4}
-                    placeholder="Ej: Estimado paciente, le recordamos que tiene una cita médica programada. Por favor confirme su asistencia..."
+                    placeholder="Ej: Estimado paciente, le recordamos que tiene una cita médica programada..."
                     value={campanaForm.mensaje_email} onChange={e => setCampanaForm(f=>({...f,mensaje_email:e.target.value}))} style={{ resize:'vertical', minHeight:100 }} />
                 </div>
               )}
 
               <div className="alert alert-info" style={{ fontSize:'.83rem' }}>
-                ℹ️ Se filtrarán los pacientes con citas registradas según los criterios seleccionados. El envío se realizará por {campanaForm.tipo_canal === 'AMBOS' ? 'SMS y email' : campanaForm.tipo_canal}.
+                ℹ️ Los destinatarios se toman de la base de demanda inducida por zona y municipio.
+                {!campanaForm.filtro_zona && ' Selecciona una zona para filtrar.'}
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModalCampana(false)}>Cancelar</button>
-              <button className="btn btn-primary" disabled={!campanaForm.nombre} onClick={saveCampana}>Crear campaña</button>
+              <button className="btn btn-primary"
+                disabled={!campanaForm.nombre || !campanaForm.filtro_zona}
+                onClick={saveCampana}>Crear campaña</button>
             </div>
           </div>
         </div>

@@ -80,6 +80,8 @@ export async function runSeed(): Promise<void> {
       mensaje_email        TEXT,
       tipo_canal           TEXT    NOT NULL DEFAULT 'SMS',
       estado               TEXT    NOT NULL DEFAULT 'BORRADOR',
+      filtro_zona          TEXT,
+      filtro_municipios    TEXT,
       filtro_sede_id       INTEGER,
       filtro_estado_cita   TEXT,
       total_destinatarios  INTEGER DEFAULT 0,
@@ -89,6 +91,16 @@ export async function runSeed(): Promise<void> {
       created_at           TEXT    DEFAULT (datetime('now','localtime'))
     )
   `);
+
+  // ─── Migración: agregar columnas de zona/municipio si no existen ─────
+  const campanasCols = await db.prepare('PRAGMA table_info(campanas)').all() as any[];
+  const colNames = campanasCols.map((c: any) => c.name);
+  if (!colNames.includes('filtro_zona')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN filtro_zona TEXT');
+  }
+  if (!colNames.includes('filtro_municipios')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN filtro_municipios TEXT');
+  }
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS citas (

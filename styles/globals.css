@@ -292,6 +292,25 @@ tbody tr:last-child td{border-bottom:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 
+/* ─── CAMPAÑAS (ZONAS Y MUNICIPIOS) ───────────────────────── */
+.zona-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.zona-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; color: var(--text-2); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all var(--dur) var(--ease); display: flex; align-items: center; gap: 6px; }
+.zona-btn:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--border-h); }
+.zona-btn.selected { background: var(--teal-dim); border-color: var(--teal); color: var(--teal); box-shadow: 0 0 0 1px rgba(0,212,170,.2); }
+.zona-btn-count { background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; }
+.zona-btn.selected .zona-btn-count { background: var(--teal); color: #000; }
+
+.municipio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
+.municipio-btn { background: transparent; border: 1px dashed var(--border); border-radius: var(--r-sm); padding: 6px 10px; color: var(--text-3); font-size: 0.78rem; text-align: left; cursor: pointer; transition: all var(--dur); display: flex; justify-content: space-between; align-items: center; }
+.municipio-btn:hover { border-color: var(--text-3); color: var(--text-2); }
+.municipio-btn.selected { background: rgba(79, 172, 254, 0.08); border-color: var(--info); border-style: solid; color: var(--text-1); }
+.municipio-count { font-size: 0.65rem; opacity: 0.6; }
+
+.dest-preview { background: linear-gradient(135deg, rgba(0,212,170,.08), rgba(79,172,254,.08)); border: 1px solid rgba(0,212,170,.15); border-radius: var(--r-md); padding: 16px; margin: 12px 0; display: flex; align-items: center; gap: 12px; font-size: 0.9rem; color: var(--text-2); }
+
+.campana-zona-tag { background: rgba(79,172,254,.1); border: 1px solid rgba(79,172,254,.3); color: var(--info); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+.campana-mun-tag { background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--text-2); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; display: inline-block; }
+
 /* ─── UTILS ─────────────────────────────────────────────── */
 .hidden{display:none!important}
 .flex{display:flex} .flex-col{flex-direction:column}
