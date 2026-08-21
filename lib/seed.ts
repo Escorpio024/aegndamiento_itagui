@@ -90,6 +90,39 @@ export async function runSeed(): Promise<void> {
     )
   `);
 
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS demanda_inducida (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo_examen TEXT NOT NULL,
+      contrato_afil TEXT,
+      serial_bdua TEXT,
+      tipo_identificacion TEXT,
+      numero_identificacion TEXT,
+      llave TEXT,
+      nombres TEXT,
+      apellidos TEXT,
+      fecha_nacimiento TEXT,
+      edad TEXT,
+      grupo_edad TEXT,
+      sexo TEXT,
+      etnia TEXT,
+      regimen_afiliacion TEXT,
+      estado_afiliacion TEXT,
+      telefonos TEXT,
+      email TEXT,
+      zona TEXT,
+      municipio TEXT,
+      subregion TEXT,
+      direccion_residencia TEXT,
+      barrio_residencia TEXT,
+      observaciones_demanda_inducida TEXT,
+      observacion TEXT,
+      datos_especificos TEXT,
+      sms_enviado INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+  `);
+
   // ─── Admin ────────────────────────────────────────────────────
   const adminExists = await db.prepare("SELECT id FROM usuarios WHERE email = 'admin@itagui.gov.co'").get();
   if (!adminExists) {
