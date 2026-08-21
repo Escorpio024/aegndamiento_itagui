@@ -685,14 +685,14 @@ export default function AdminPage() {
               )}
 
               <div className="alert alert-info" style={{ fontSize:'.83rem' }}>
-                ℹ️ Los destinatarios se toman de la base de demanda inducida por zona y municipio.
-                {!campanaForm.filtro_zona && ' Selecciona una zona para filtrar.'}
+                ℹ️ Los destinatarios se toman de la base de demanda inducida según los municipios seleccionados.
+                {campanaForm.filtro_municipios.length === 0 && ' Si no seleccionas ningún municipio, la campaña solo se enviará a los teléfonos de prueba.'}
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModalCampana(false)}>Cancelar</button>
               <button className="btn btn-primary"
-                disabled={!campanaForm.nombre || !campanaForm.filtro_zona}
+                disabled={!campanaForm.nombre}
                 onClick={saveCampana}>Crear campaña</button>
             </div>
           </div>
