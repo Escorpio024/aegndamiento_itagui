@@ -220,6 +220,7 @@ export default function AdminPage() {
     let totalEmail = 0;
     let totalProcessed = 0;
     let done = false;
+    const allErrors: string[] = [];
 
     try {
       while (!done) {
@@ -235,15 +236,21 @@ export default function AdminPage() {
         totalEmail     += d.enviados_email || 0;
         totalProcessed += d.processed      || 0;
         done            = d.done;
+        if (d.errores?.length) allErrors.push(...d.errores);
 
         if (!done) {
-          toast(`⏳ Enviando... ${totalProcessed} de ${d.total} procesados (${totalSms} SMS enviados)`, 'info');
+          toast(`⏳ Enviando... ${totalProcessed} de ${d.total} procesados (${totalSms} SMS ✅)`, 'info');
         }
 
         offset += LIMIT;
       }
 
-      toast(`✅ Campaña enviada. SMS: ${totalSms} | Email: ${totalEmail}`, 'success');
+      if (totalSms === 0 && allErrors.length > 0) {
+        console.error('Errores de envío:', allErrors);
+        toast(`⚠️ 0 SMS enviados. Primer error: ${allErrors[0]}`, 'error');
+      } else {
+        toast(`✅ Campaña enviada. SMS: ${totalSms} | Email: ${totalEmail}`, 'success');
+      }
       load();
     } catch (e: any) {
       toast(e.message, 'error');

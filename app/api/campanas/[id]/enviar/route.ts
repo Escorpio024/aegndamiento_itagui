@@ -124,6 +124,11 @@ export async function POST(
         }
         const telefonosValidos = [...new Set(foundNumbers)];
 
+        // Debug: registrar si no se encontr\u00f3 ning\u00fan celular para esta persona
+        if (telefonosValidos.length === 0) {
+          errores.push(`Sin celular: ${dest.nombre} | tel: ${dest.telefonos || 'vac\u00edo'} | munic: ${dest.municipio}`);
+        }
+
         for (const numeroRaw of telefonosValidos) {
           const numero = `57${numeroRaw}`;
           if (ONURIX_CLIENT && ONURIX_KEY) {
