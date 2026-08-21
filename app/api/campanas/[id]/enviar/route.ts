@@ -91,8 +91,16 @@ export async function POST(
       // ── SMS ────────────────────────────────────────────────────────
       if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms) {
         try {
-          const numero = dest.telefono ? dest.telefono.replace(/\D/g, '') : '';
-          if (numero.length >= 10) {
+          const fullText = [
+            dest.telefonos, dest.email, dest.observaciones_demanda_inducida,
+            dest.observacion, dest.datos_especificos
+          ].filter(Boolean).join(' ');
+
+          const matches = fullText.match(/3\d{9}/g) || [];
+          const telefonosValidos = [...new Set(matches)];
+
+          for (const numeroRaw of telefonosValidos) {
+            const numero = `57${numeroRaw}`;
             if (ONURIX_CLIENT && ONURIX_KEY) {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 6000); 
@@ -105,7 +113,7 @@ export async function POST(
                   body: new URLSearchParams({
                     client: ONURIX_CLIENT,
                     key: ONURIX_KEY,
-                    phone: numero.length > 10 ? numero.slice(-10) : numero,
+                    phone: numero,
                     sms: campana.mensaje_sms,
                   }).toString(),
                   signal: controller.signal,
@@ -114,7 +122,7 @@ export async function POST(
               } catch (err: any) {
                 clearTimeout(timeoutId);
                 errores.push(`SMS ${dest.nombre}: Timeout (${err.message})`);
-                return;
+                continue;
               }
 
               const respText = await smsRes.text();
