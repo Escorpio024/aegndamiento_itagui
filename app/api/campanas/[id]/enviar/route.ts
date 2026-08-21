@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 
+export const maxDuration = 60; // Permitir hasta 60 segundos en Vercel Hobby
+
 // POST /api/campanas/[id]/enviar — ejecutar el envío de la campaña
 export async function POST(
   req: Request,
@@ -81,8 +83,8 @@ export async function POST(
   let enviados_email = 0;
   const errores: string[] = [];
 
-  // Procesar en bloques para no superar el timeout de Vercel (15s) ni saturar la API
-  const BATCH_SIZE = 20;
+  // Procesar en bloques para no superar el timeout de Vercel
+  const BATCH_SIZE = 50;
     
   for (let i = 0; i < destinatarios.length; i += BATCH_SIZE) {
     const chunk = destinatarios.slice(i, i + BATCH_SIZE);
@@ -96,7 +98,11 @@ export async function POST(
             dest.observacion, dest.datos_especificos
           ].filter(Boolean).join(' ');
 
-          const matches = fullText.match(/3\d{9}/g) || [];
+          // Limpiar espacios, guiones o puntos que estén ENTRE números (ej: "300 123 45 67" -> "3001234567")
+          const cleanedText = fullText.replace(/(\d)[\s\-\.]+(?=\d)/g, '$1');
+
+          // Extraer celulares válidos (10 dígitos empezando por 3)
+          const matches = cleanedText.match(/3\d{9}/g) || [];
           const telefonosValidos = [...new Set(matches)];
 
           for (const numeroRaw of telefonosValidos) {
