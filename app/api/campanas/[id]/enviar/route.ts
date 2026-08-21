@@ -102,33 +102,29 @@ export async function POST(
           // Limpiar espacios, guiones o puntos que estén ENTRE números (ej: "300 123 45 67" -> "3001234567")
           const cleanedText = fullText.replace(/(\d)[\s\-\.]+(?=\d)/g, '$1');
 
-          // Extraer bloques de dígitos continuos (ej: "60424306473137572521" o "3147305617")
+          // Parseo codicioso izquierda → derecha de cada bloque de dígitos.
+          // Maneja casos como "60424306473137572521" (fijo+celular concatenados, 20 digs)
+          // y bloques irregulares de cualquier longitud.
           const digitBlocks = cleanedText.match(/\d+/g) || [];
           const foundNumbers: string[] = [];
 
           for (const block of digitBlocks) {
-            // Partir cada bloque en trozos de 10 dígitos (tamaño estándar de números colombianos)
-            // Ej: "60424306473137572521" → ["6042430647", "3137572521"]
-            // Esto evita extraer números falsos del medio de un bloque largo
-            if (block.length % 10 === 0) {
-              for (let p = 0; p < block.length; p += 10) {
-                foundNumbers.push(block.slice(p, p + 10));
+            let pos = 0;
+            while (pos <= block.length - 10) {
+              const chunk = block.slice(pos, pos + 10);
+              if (/^3\d{9}$/.test(chunk)) {
+                foundNumbers.push(chunk);  // Celular colombiano ✓
+                pos += 10;
+              } else if (/^6\d{9}$/.test(chunk)) {
+                pos += 10;                 // Fijo colombiano → descartar
+              } else {
+                pos += 1;                  // Dígito de alineación → avanzar 1
               }
-            } else if (block.length === 10) {
-              foundNumbers.push(block);
-            }
-            // Números de longitud irregular: intentar extraer con regex como fallback
-            else if (block.length > 10) {
-              const fallback = block.match(/3\d{9}/g) || [];
-              foundNumbers.push(...fallback);
             }
           }
 
-          // Filtrar: solo celulares colombianos (10 dígitos que empiecen con 3)
-          // Excluye fijos (604..., 605..., etc.) y números inválidos
-          const telefonosValidos = [...new Set(
-            foundNumbers.filter(n => /^3\d{9}$/.test(n))
-          )];
+          // Eliminar duplicados
+          const telefonosValidos = [...new Set(foundNumbers)];
 
           for (const numeroRaw of telefonosValidos) {
             const numero = `57${numeroRaw}`;
