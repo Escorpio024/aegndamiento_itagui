@@ -212,35 +212,44 @@ export default function AdminPage() {
   const enviarCampana = async (c: Campana) => {
     if (!confirm(`¿Enviar la campaña "${c.nombre}" a ${c.total_destinatarios} destinatarios? Esta acción no se puede deshacer.`)) return;
     setEnviando(true);
-    toast('⏳ Enviando... esto puede tardar hasta 60 segundos. No cierres la ventana.', 'info');
+    toast('⏳ Iniciando envío...', 'info');
+
+    const LIMIT = 10;
+    let offset = 0;
+    let totalSms = 0;
+    let totalEmail = 0;
+    let totalProcessed = 0;
+    let done = false;
+
     try {
-      // Timeout generoso para no cortar mientras Vercel envía los SMS
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 65000);
-      const r = await fetch(`/api/campanas/${c.id}/enviar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-        signal: controller.signal,
-      });
-      clearTimeout(tid);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Error al enviar');
-      toast(`✅ Campaña enviada. SMS: ${d.enviados_sms} | Email: ${d.enviados_email}`, 'success');
-      if (d.errores?.length > 0) {
-        console.warn('Errores de envío:', d.errores);
+      while (!done) {
+        const r = await fetch(`/api/campanas/${c.id}/enviar?offset=${offset}&limit=${LIMIT}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Error al enviar');
+
+        totalSms       += d.enviados_sms   || 0;
+        totalEmail     += d.enviados_email || 0;
+        totalProcessed += d.processed      || 0;
+        done            = d.done;
+
+        if (!done) {
+          toast(`⏳ Enviando... ${totalProcessed} de ${d.total} procesados (${totalSms} SMS enviados)`, 'info');
+        }
+
+        offset += LIMIT;
       }
+
+      toast(`✅ Campaña enviada. SMS: ${totalSms} | Email: ${totalEmail}`, 'success');
       load();
-    } catch (e:any) {
-      if (e.name === 'AbortError') {
-        // El servidor siguió trabajando pero el navegador agotó el tiempo
-        toast('⚠️ El envío sigue en proceso en el servidor. Recarga en 30 segundos para ver el resultado.', 'info');
-        setTimeout(() => load(), 30000);
-      } else {
-        toast(e.message, 'error');
-      }
+    } catch (e: any) {
+      toast(e.message, 'error');
+    } finally {
+      setEnviando(false);
     }
-    finally { setEnviando(false); }
   };
 
   const eliminarCampana = async (c: Campana) => {
