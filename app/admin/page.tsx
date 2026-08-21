@@ -104,7 +104,14 @@ export default function AdminPage() {
   useEffect(() => {
     api('GET', '/api/sedes?all=true').then(setSedes).catch(()=>{});
     api('GET', '/api/doctores?all=true').then(setDocs).catch(()=>{});
-    api('GET', '/api/campanas/zonas').then(setZonas).catch(()=>{});
+    api('GET', '/api/campanas/zonas').then(data => {
+      // El API devuelve { zonas, municipios, totales } o el array viejo
+      if (Array.isArray(data)) {
+        setZonas(data);
+      } else if (data?.zonas) {
+        setZonas(data.zonas);
+      }
+    }).catch(()=>{});
   }, []);
 
   const cambiarEstadoCita = async (id: number, estado: string) => {
