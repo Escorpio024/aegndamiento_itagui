@@ -132,7 +132,8 @@ export async function POST(
             try { respJson = JSON.parse(respText); } catch { /* no-JSON */ }
 
             // Onurix returns 200 OK even for errors like "IP no aprobada", but includes an "error" property
-            if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || !respJson.status)) {
+            // On success it returns {"status":1, ...}
+            if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || respJson.status === 1 || !respJson.status)) {
               enviados_sms++;
               // Marcar como enviado en la BD
               await db.prepare(
