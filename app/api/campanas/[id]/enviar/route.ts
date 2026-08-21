@@ -108,25 +108,14 @@ export async function POST(
           dest.observacion, dest.datos_especificos,
         ].filter(Boolean).join(' ');
 
-        const cleanedText = fullText.replace(/(\d)[\s\-\.]+(?=\d)/g, '$1');
+        // MISMO algoritmo que usa /api/campanas/[id]/destinatarios (ya probado y funciona)
+        // Busca cualquier secuencia de 10 dígitos que empiece por 3 (celulares colombianos)
+        const matches = fullText.match(/3\d{9}/g) || [];
+        const telefonosValidos = [...new Set(matches)];
 
-        // Parseo codicioso: extrae celulares colombianos, descarta fijos
-        const digitBlocks = cleanedText.match(/\d+/g) || [];
-        const foundNumbers: string[] = [];
-        for (const block of digitBlocks) {
-          let pos = 0;
-          while (pos <= block.length - 10) {
-            const c = block.slice(pos, pos + 10);
-            if (/^3\d{9}$/.test(c))      { foundNumbers.push(c); pos += 10; }
-            else if (/^6\d{9}$/.test(c)) { pos += 10; }
-            else                          { pos += 1; }
-          }
-        }
-        const telefonosValidos = [...new Set(foundNumbers)];
-
-        // Debug: registrar si no se encontr\u00f3 ning\u00fan celular para esta persona
+        // Debug: registrar si no se encontró ningún celular
         if (telefonosValidos.length === 0) {
-          errores.push(`Sin celular: ${dest.nombre} | tel: ${dest.telefonos || 'vac\u00edo'} | munic: ${dest.municipio}`);
+          errores.push(`Sin celular: ${dest.nombre} | tel: ${String(dest.telefonos).slice(0, 30)}`);
         }
 
         for (const numeroRaw of telefonosValidos) {
