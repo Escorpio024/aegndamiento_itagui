@@ -114,14 +114,15 @@ export async function POST(
             let respJson: any = {};
             try { respJson = JSON.parse(respText); } catch { /* no-JSON */ }
 
-            if (smsRes.ok) {
+            // Onurix returns 200 OK even for errors like "IP no aprobada", but includes an "error" property
+            if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || !respJson.status)) {
               enviados_sms++;
               // Marcar como enviado en la BD
               await db.prepare(
                 'UPDATE demanda_inducida SET sms_enviado = 1 WHERE numero_identificacion = ?'
               ).run(dest.numero_identificacion).catch(() => {});
             } else {
-              errores.push(`SMS ${dest.nombre} (${numero}): ${respJson.message ?? respText}`);
+              errores.push(`SMS ${dest.nombre} (${numero}): ${respJson.msg || respJson.message || respJson.error || respText}`);
             }
           } else {
             // Modo desarrollo — sin credenciales
