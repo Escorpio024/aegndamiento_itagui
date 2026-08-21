@@ -8,6 +8,8 @@ interface Doctor  { id:number; nombre:string; especialidad:string; activo:number
 interface Horario { id:number; sede_id:number; doctor_id:number; fecha:string; hora_inicio:string; hora_fin:string; disponible:number; sede_nombre:string; doctor_nombre:string; cita_id?:number; cita_estado?:string; paciente_nombre?:string; }
 interface Proc    { id:number; cups:string; nombre:string; modalidad:string; contraste:string; activo:number; }
 interface Cita    { id:number; estado:string; paciente_nombre:string; documento:string; procedimiento_nombre:string; cups:string; sede_nombre:string; fecha:string; hora_inicio:string; hora_fin:string; doctor_nombre:string; created_at:string; }
+interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_sede_id:number|null; filtro_estado_cita:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
+interface Destinatario { id:number; nombre:string; telefono:string; email:string; documento:string; sede_nombre:string; }
 
 const SECTIONS = [
   { id:'citas',        icon:'📋', label:'Citas' },
@@ -15,6 +17,7 @@ const SECTIONS = [
   { id:'doctores',     icon:'👨‍⚕️', label:'Doctores' },
   { id:'horarios',     icon:'🗓️', label:'Horarios' },
   { id:'procedimientos', icon:'🫁', label:'Procedimientos' },
+  { id:'campanas',     icon:'📣', label:'Campañas' },
 ];
 
 const ESTADOS = ['PENDIENTE','CONFIRMADA','CANCELADA','COMPLETADA'];
@@ -26,11 +29,20 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
 
   // Data states
-  const [citas,   setCitas]   = useState<Cita[]>([]);
-  const [sedes,   setSedes]   = useState<Sede[]>([]);
-  const [docs,    setDocs]    = useState<Doctor[]>([]);
-  const [hors,    setHors]    = useState<Horario[]>([]);
-  const [procs,   setProcs]   = useState<Proc[]>([]);
+  const [citas,         setCitas]         = useState<Cita[]>([]);
+  const [sedes,         setSedes]         = useState<Sede[]>([]);
+  const [docs,          setDocs]          = useState<Doctor[]>([]);
+  const [hors,          setHors]          = useState<Horario[]>([]);
+  const [procs,         setProcs]         = useState<Proc[]>([]);
+  const [campanas,      setCampanas]      = useState<Campana[]>([]);
+  const [destinatarios, setDestinatarios] = useState<Destinatario[]>([]);
+  const [loadingDest,   setLoadingDest]   = useState(false);
+  const [enviando,      setEnviando]      = useState(false);
+
+  // Campaña form
+  const [modalCampana, setModalCampana] = useState(false);
+  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_sede_id:'', filtro_estado_cita:'' });
+  const [campanaSeleccionada, setCampanaSeleccionada] = useState<Campana|null>(null);
 
   // Filter states
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -78,6 +90,7 @@ export default function AdminPage() {
         const d = await api('GET', `/api/horarios?${q}`); setHors(d);
       }
       if (section === 'procedimientos') { const d = await api('GET', '/api/procedimientos'); setProcs(d); }
+      if (section === 'campanas') { const d = await api('GET', '/api/campanas'); setCampanas(d); }
     } catch (e:any) { toast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [section, filtroEstado, filtroSede, filtroFecha, horSede, horFecha]);
@@ -135,6 +148,37 @@ export default function AdminPage() {
       ...b,
       diasSemana: b.diasSemana.includes(d) ? b.diasSemana.filter(x=>x!==d) : [...b.diasSemana, d],
     }));
+  };
+
+  const saveCampana = async () => {
+    try {
+      const r = await api('POST', '/api/campanas', campanaForm);
+      toast(`✅ Campaña creada. ${r.total_destinatarios} destinatarios encontrados.`, 'success');
+      setModalCampana(false);
+      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_sede_id:'', filtro_estado_cita:'' });
+      load();
+    } catch (e:any) { toast(e.message, 'error'); }
+  };
+
+  const verDestinatarios = async (c: Campana) => {
+    setCampanaSeleccionada(c);
+    setLoadingDest(true);
+    try {
+      const d = await api('GET', `/api/campanas/${c.id}/destinatarios`);
+      setDestinatarios(d);
+    } catch (e:any) { toast(e.message, 'error'); }
+    finally { setLoadingDest(false); }
+  };
+
+  const enviarCampana = async (c: Campana) => {
+    if (!confirm(`¿Enviar la campaña "${c.nombre}" a ${c.total_destinatarios} destinatarios? Esta acción no se puede deshacer.`)) return;
+    setEnviando(true);
+    try {
+      const r = await api('POST', `/api/campanas/${c.id}/enviar`, {});
+      toast(`✅ Campaña enviada. SMS: ${r.enviados_sms} | Email: ${r.enviados_email}`, 'success');
+      load();
+    } catch (e:any) { toast(e.message, 'error'); }
+    finally { setEnviando(false); }
   };
 
   return (
@@ -339,7 +383,205 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── CAMPAÑAS ──────────────────────────────────────── */}
+        {section === 'campanas' && (
+          <div>
+            <div className="admin-toolbar">
+              <h2 className="admin-title">📣 Campañas de Recordatorio</h2>
+              <button className="btn btn-primary" onClick={() => setModalCampana(true)}>+ Nueva Campaña</button>
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-3" style={{ marginBottom:24, flexWrap:'wrap' }}>
+              <div className="stat-card" style={{ flex:'1 1 180px' }}>
+                <div className="stat-icon teal">📣</div>
+                <div><div className="stat-value">{campanas.length}</div><div className="stat-label">Campañas totales</div></div>
+              </div>
+              <div className="stat-card" style={{ flex:'1 1 180px' }}>
+                <div className="stat-icon succ">✅</div>
+                <div><div className="stat-value">{campanas.filter(c=>c.estado==='ENVIADA').length}</div><div className="stat-label">Enviadas</div></div>
+              </div>
+              <div className="stat-card" style={{ flex:'1 1 180px' }}>
+                <div className="stat-icon warn">📱</div>
+                <div><div className="stat-value">{campanas.reduce((a,c)=>a+c.enviados_sms,0)}</div><div className="stat-label">SMS enviados</div></div>
+              </div>
+              <div className="stat-card" style={{ flex:'1 1 180px' }}>
+                <div className="stat-icon blue">✉️</div>
+                <div><div className="stat-value">{campanas.reduce((a,c)=>a+c.enviados_email,0)}</div><div className="stat-label">Emails enviados</div></div>
+              </div>
+            </div>
+
+            {loading ? <div className="loading"><div className="spinner" /></div> : (
+              campanas.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'60px 0' }}>
+                  <div style={{ fontSize:48, marginBottom:16 }}>📣</div>
+                  <div style={{ color:'var(--text-3)', fontSize:'1.05rem' }}>No hay campañas aún.</div>
+                  <div style={{ color:'var(--text-3)', fontSize:'.85rem', marginTop:8 }}>Crea tu primera campaña para enviar recordatorios a los pacientes.</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                  {campanas.map(c => (
+                    <div key={c.id} className="campana-card">
+                      <div className="campana-header">
+                        <div>
+                          <div className="campana-nombre">{c.nombre}</div>
+                          <div className="campana-meta">
+                            <span className={`badge ${c.estado==='ENVIADA'?'badge-confirmada':c.estado==='ENVIANDO'?'badge-pendiente':'badge-cancelada'}`}>{c.estado}</span>
+                            <span className="campana-canal-badge">{c.tipo_canal}</span>
+                            <span style={{ color:'var(--text-3)', fontSize:'.8rem' }}>🗓️ {c.created_at?.slice(0,10)}</span>
+                          </div>
+                        </div>
+                        <div className="campana-stats">
+                          <div className="campana-stat"><span className="campana-stat-val">{c.total_destinatarios}</span><span>Destinatarios</span></div>
+                          {(c.tipo_canal==='SMS'||c.tipo_canal==='AMBOS') && <div className="campana-stat"><span className="campana-stat-val">{c.enviados_sms}</span><span>SMS</span></div>}
+                          {(c.tipo_canal==='EMAIL'||c.tipo_canal==='AMBOS') && <div className="campana-stat"><span className="campana-stat-val">{c.enviados_email}</span><span>Email</span></div>}
+                        </div>
+                      </div>
+
+                      {c.filtro_sede_id && (
+                        <div style={{ fontSize:'.82rem', color:'var(--text-3)', marginTop:6 }}>
+                          🏥 Sede: {sedes.find(s=>s.id===c.filtro_sede_id)?.nombre ?? `#${c.filtro_sede_id}`}
+                          {c.filtro_estado_cita && <> · 📋 Estado cita: {c.filtro_estado_cita}</>}
+                        </div>
+                      )}
+
+                      {c.mensaje_sms && (
+                        <div className="campana-msg">
+                          <span style={{ opacity:.5 }}>📱 SMS:</span> {c.mensaje_sms}
+                        </div>
+                      )}
+                      {c.mensaje_email && (
+                        <div className="campana-msg">
+                          <span style={{ opacity:.5 }}>✉️ Email:</span> {c.mensaje_email}
+                        </div>
+                      )}
+
+                      <div className="campana-actions">
+                        <button className="btn btn-outline btn-sm" onClick={() => verDestinatarios(c)}>👥 Ver destinatarios</button>
+                        {c.estado !== 'ENVIADA' && (
+                          <button className="btn btn-primary btn-sm" disabled={enviando} onClick={() => enviarCampana(c)}>
+                            {enviando ? '⏳ Enviando...' : '🚀 Enviar ahora'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* Modal destinatarios */}
+            {campanaSeleccionada && (
+              <div className="modal-overlay open" onClick={e => { if(e.target===e.currentTarget) setCampanaSeleccionada(null); }}>
+                <div className="modal" style={{ maxWidth:700, width:'90vw' }}>
+                  <div className="modal-header">
+                    <div className="modal-title">👥 Destinatarios — {campanaSeleccionada.nombre}</div>
+                    <button className="modal-close" onClick={() => setCampanaSeleccionada(null)}>✕</button>
+                  </div>
+                  <div className="modal-body">
+                    {loadingDest ? <div className="loading"><div className="spinner" /></div> : (
+                      destinatarios.length === 0 ? (
+                        <div style={{ textAlign:'center', padding:32, color:'var(--text-3)' }}>Sin destinatarios para los filtros de esta campaña.</div>
+                      ) : (
+                        <>
+                          <div style={{ marginBottom:12, fontSize:'.85rem', color:'var(--text-3)' }}>{destinatarios.length} pacientes encontrados</div>
+                          <div className="table-wrap"><div className="table-scroll">
+                            <table>
+                              <thead><tr><th>Paciente</th><th>Teléfono</th><th>Email</th><th>Sede</th></tr></thead>
+                              <tbody>
+                                {destinatarios.map(d => (
+                                  <tr key={d.id}>
+                                    <td><div className="td-main">{d.nombre}</div><div className="td-sub">{d.documento}</div></td>
+                                    <td style={{ fontSize:'.85rem' }}>{d.telefono}</td>
+                                    <td style={{ fontSize:'.82rem', color:'var(--text-3)' }}>{d.email}</td>
+                                    <td style={{ fontSize:'.82rem' }}>{d.sede_nombre}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div></div>
+                        </>
+                      )
+                    )}
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-outline" onClick={() => setCampanaSeleccionada(null)}>Cerrar</button>
+                    {campanaSeleccionada.estado !== 'ENVIADA' && (
+                      <button className="btn btn-primary" disabled={enviando} onClick={() => { setCampanaSeleccionada(null); enviarCampana(campanaSeleccionada); }}>
+                        {enviando ? '⏳ Enviando...' : '🚀 Enviar campaña'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ── MODAL: NUEVA CAMPAÑA ──────────────────────────────── */}
+      {modalCampana && (
+        <div className="modal-overlay open" onClick={e => { if(e.target===e.currentTarget) setModalCampana(false); }}>
+          <div className="modal" style={{ maxWidth:580, width:'90vw' }}>
+            <div className="modal-header">
+              <div className="modal-title">📣 Nueva Campaña</div>
+              <button className="modal-close" onClick={() => setModalCampana(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group"><label className="form-label">Nombre de la campaña *</label>
+                <input className="form-control" placeholder="Ej: Recordatorio citas diciembre" value={campanaForm.nombre} onChange={e => setCampanaForm(f=>({...f,nombre:e.target.value}))} /></div>
+
+              <div className="form-grid">
+                <div className="form-group"><label className="form-label">Canal de envío *</label>
+                  <select className="form-control" value={campanaForm.tipo_canal} onChange={e => setCampanaForm(f=>({...f,tipo_canal:e.target.value}))}>
+                    <option value="SMS">📱 Solo SMS</option>
+                    <option value="EMAIL">✉️ Solo Email</option>
+                    <option value="AMBOS">📱✉️ SMS + Email</option>
+                  </select></div>
+
+                <div className="form-group"><label className="form-label">Filtrar por sede</label>
+                  <select className="form-control" value={campanaForm.filtro_sede_id} onChange={e => setCampanaForm(f=>({...f,filtro_sede_id:e.target.value}))}>
+                    <option value="">Todas las sedes</option>
+                    {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  </select></div>
+              </div>
+
+              <div className="form-group"><label className="form-label">Filtrar por estado de cita</label>
+                <select className="form-control" value={campanaForm.filtro_estado_cita} onChange={e => setCampanaForm(f=>({...f,filtro_estado_cita:e.target.value}))}>
+                  <option value="">Todos los estados</option>
+                  {['PENDIENTE','CONFIRMADA','CANCELADA','COMPLETADA'].map(e => <option key={e}>{e}</option>)}
+                </select></div>
+
+              {(campanaForm.tipo_canal === 'SMS' || campanaForm.tipo_canal === 'AMBOS') && (
+                <div className="form-group">
+                  <label className="form-label">Mensaje SMS * <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.8rem' }}>({campanaForm.mensaje_sms.length}/160 caracteres)</span></label>
+                  <textarea className="form-control" rows={3} maxLength={160}
+                    placeholder="Ej: Estimado paciente, le recordamos su cita médica programada. Para más información llame al 3609000."
+                    value={campanaForm.mensaje_sms} onChange={e => setCampanaForm(f=>({...f,mensaje_sms:e.target.value}))} style={{ resize:'vertical', minHeight:80 }} />
+                </div>
+              )}
+
+              {(campanaForm.tipo_canal === 'EMAIL' || campanaForm.tipo_canal === 'AMBOS') && (
+                <div className="form-group">
+                  <label className="form-label">Mensaje Email *</label>
+                  <textarea className="form-control" rows={4}
+                    placeholder="Ej: Estimado paciente, le recordamos que tiene una cita médica programada. Por favor confirme su asistencia..."
+                    value={campanaForm.mensaje_email} onChange={e => setCampanaForm(f=>({...f,mensaje_email:e.target.value}))} style={{ resize:'vertical', minHeight:100 }} />
+                </div>
+              )}
+
+              <div className="alert alert-info" style={{ fontSize:'.83rem' }}>
+                ℹ️ Se filtrarán los pacientes con citas registradas según los criterios seleccionados. El envío se realizará por {campanaForm.tipo_canal === 'AMBOS' ? 'SMS y email' : campanaForm.tipo_canal}.
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setModalCampana(false)}>Cancelar</button>
+              <button className="btn btn-primary" disabled={!campanaForm.nombre} onClick={saveCampana}>Crear campaña</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL: SEDE ────────────────────────────────────── */}
       {modalSede && (

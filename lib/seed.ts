@@ -73,6 +73,24 @@ export async function runSeed(): Promise<void> {
   `);
 
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS campanas (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre               TEXT    NOT NULL,
+      mensaje_sms          TEXT,
+      mensaje_email        TEXT,
+      tipo_canal           TEXT    NOT NULL DEFAULT 'SMS',
+      estado               TEXT    NOT NULL DEFAULT 'BORRADOR',
+      filtro_sede_id       INTEGER,
+      filtro_estado_cita   TEXT,
+      total_destinatarios  INTEGER DEFAULT 0,
+      enviados_sms         INTEGER DEFAULT 0,
+      enviados_email       INTEGER DEFAULT 0,
+      sent_at              TEXT,
+      created_at           TEXT    DEFAULT (datetime('now','localtime'))
+    )
+  `);
+
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS citas (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
       usuario_id       INTEGER NOT NULL,
