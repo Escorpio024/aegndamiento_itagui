@@ -177,7 +177,7 @@ export default function AdminPage() {
 
   // Contar destinatarios al cambiar zona/municipios
   const contarDestinatarios = async (zona: string, municipios: string[]) => {
-    if (!zona) { setContandoDest(0); return; }
+    if (municipios.length === 0) { setContandoDest(0); return; }
     setConteoLoading(true);
     try {
       const r = await api('POST', '/api/campanas', {
@@ -605,49 +605,30 @@ export default function AdminPage() {
                 <input className="form-control" placeholder="Ej: 3001234567, 3109876543" value={campanaForm.telefonos_prueba} onChange={e => setCampanaForm(f=>({...f,telefonos_prueba:e.target.value}))} />
               </div>
 
-              {/* ── Selector Zona ──────────────────────────────── */}
-              <div className="form-group">
-                <label className="form-label">🗺️ Zona de atención
-                  {zonas.length === 0 && <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>Cargando zonas...</span>}
-                </label>
-                <div className="zona-selector">
-                  <button type="button"
-                    className={`zona-btn${!campanaForm.filtro_zona ? ' selected' : ''}`}
-                    onClick={() => {
-                      setCampanaForm(f => ({...f, filtro_zona:'', filtro_municipios:[]}));
-                      setContandoDest(0);
-                    }}>Todas las zonas</button>
-                  {zonas.map(z => (
-                    <button key={z.nombre} type="button"
-                      className={`zona-btn${campanaForm.filtro_zona===z.nombre ? ' selected' : ''}`}
-                      onClick={() => {
-                        const allMuns = z.municipios.map(m => m.nombre);
-                        setCampanaForm(f => ({...f, filtro_zona: z.nombre, filtro_municipios: allMuns}));
-                        contarDestinatarios(z.nombre, allMuns);
-                      }}>
-                      {z.nombre}
-                      <span className="zona-btn-count">{z.total.toLocaleString()}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Selector Municipios (cascada) ───────────────── */}
+              {/* ── Selector Municipios ───────────────── */}
               {(() => {
-                const munsToRender = campanaForm.filtro_zona 
-                  ? zonas.find(z => z.nombre === campanaForm.filtro_zona)?.municipios || []
-                  : municipiosAll;
+                const munsToRender = municipiosAll;
                 
                 if (munsToRender.length === 0) return null;
 
                 return (
                   <div className="form-group" style={{ marginTop: 12 }}>
-                    <label className="form-label">
-                      🏙️ Municipios
-                      <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>
+                    <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>🏙️ Municipios</span>
+                      <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem' }}>
                         {campanaForm.filtro_municipios.length === munsToRender.length ? 'Todos seleccionados' : `${campanaForm.filtro_municipios.length} seleccionados`}
                       </span>
                     </label>
+                    
+                    <button type="button" className="btn btn-outline btn-sm" style={{ marginBottom: 10, width: '100%' }} onClick={() => {
+                      const allMuns = munsToRender.map(m => m.nombre);
+                      const isAll = campanaForm.filtro_municipios.length === munsToRender.length;
+                      const next = isAll ? [] : allMuns;
+                      setCampanaForm(f => ({...f, filtro_municipios: next}));
+                      contarDestinatarios(campanaForm.filtro_zona, next);
+                    }}>
+                      {campanaForm.filtro_municipios.length === munsToRender.length ? '❌ Deseleccionar todos' : '✅ Seleccionar todos'}
+                    </button>
                     <div className="municipio-grid" style={{ maxHeight: 300, overflowY: 'auto', padding: 4 }}>
                       {munsToRender.map(m => {
                         const sel = campanaForm.filtro_municipios.includes(m.nombre);
