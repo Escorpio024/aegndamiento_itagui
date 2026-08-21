@@ -81,88 +81,67 @@ export async function POST(
   let enviados_email = 0;
   const errores: string[] = [];
 
-  for (const dest of destinatarios) {
-    // ── SMS ─────────────────────────────────────────────────────────
-    if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms) {
-      
-      const fullText = [
-        dest.telefonos, dest.email, dest.observaciones_demanda_inducida,
-        dest.observacion, dest.datos_especificos
-      ].filter(Boolean).join(' ');
-
-      // Extraer números válidos de celular Colombia (10 dígitos que empiecen por 3)
-      const matches = fullText.match(/3\d{9}/g) || [];
-      const telefonosValidos = [...new Set(matches)]; // Únicos
-
-      for (const numeroRaw of telefonosValidos) {
+  // Procesar en bloques para no superar el timeout de Vercel (15s) ni saturar la API
+  const BATCH_SIZE = 20;
+    
+  for (let i = 0; i < destinatarios.length; i += BATCH_SIZE) {
+    const chunk = destinatarios.slice(i, i + BATCH_SIZE);
+    
+    await Promise.all(chunk.map(async (dest) => {
+      // ── SMS ────────────────────────────────────────────────────────
+      if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms) {
         try {
-          const numero = `57${numeroRaw}`;
+          const numero = dest.telefono ? dest.telefono.replace(/\D/g, '') : '';
+          if (numero.length >= 10) {
+            if (ONURIX_CLIENT && ONURIX_KEY) {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 6000); 
+              
+              let smsRes;
+              try {
+                smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                  body: new URLSearchParams({
+                    client: ONURIX_CLIENT,
+                    key: ONURIX_KEY,
+                    phone: numero.length > 10 ? numero.slice(-10) : numero,
+                    sms: campana.mensaje_sms,
+                  }).toString(),
+                  signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+              } catch (err: any) {
+                clearTimeout(timeoutId);
+                errores.push(`SMS ${dest.nombre}: Timeout (${err.message})`);
+                return;
+              }
 
-          if (ONURIX_CLIENT && ONURIX_KEY) {
-            const body = new URLSearchParams({
-              client:  ONURIX_CLIENT,
-              key:     ONURIX_KEY,
-              phone:   numero,
-              sms:     campana.mensaje_sms,
-            });
+              const respText = await smsRes.text();
+              let respJson: any = {};
+              try { respJson = JSON.parse(respText); } catch { }
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
-            
-            let smsRes;
-            try {
-              smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/x-www-form-urlencoded',
-                  'Accept':       'application/json',
-                },
-                body: body.toString(),
-                signal: controller.signal,
-              });
-              clearTimeout(timeoutId);
-            } catch (err: any) {
-              clearTimeout(timeoutId);
-              errores.push(`SMS ${dest.nombre} (${numero}): Error de conexión o Timeout (${err.message})`);
-              continue;
-            }
-
-            const respText = await smsRes.text();
-            let respJson: any = {};
-            try { respJson = JSON.parse(respText); } catch { /* no-JSON */ }
-
-            // Onurix returns 200 OK even for errors like "IP no aprobada", but includes an "error" property
-            // On success it returns {"status":1, ...}
-            if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || respJson.status === 1 || !respJson.status)) {
-              enviados_sms++;
-              // Marcar como enviado en la BD
-              await db.prepare(
-                'UPDATE demanda_inducida SET sms_enviado = 1 WHERE numero_identificacion = ?'
-              ).run(dest.numero_identificacion).catch(() => {});
+              if (smsRes.ok && !respJson.error && (respJson.status === 'success' || respJson.status === 'ok' || respJson.status === 1 || !respJson.status)) {
+                enviados_sms++;
+                await db.prepare('UPDATE demanda_inducida SET sms_enviado = 1 WHERE numero_identificacion = ?').run(dest.numero_identificacion).catch(() => {});
+              } else {
+                errores.push(`SMS ${dest.nombre}: ${respJson.msg || respJson.error || respText}`);
+              }
             } else {
-              errores.push(`SMS ${dest.nombre} (${numero}): ${respJson.msg || respJson.message || respJson.error || respText}`);
+              console.log(`[SMS DEV] → ${numero} (${dest.nombre}): ${campana.mensaje_sms}`);
+              enviados_sms++;
             }
-          } else {
-            // Modo desarrollo — sin credenciales
-            console.log(`[SMS DEV] → ${numero} (${dest.nombre} - ${dest.municipio}): ${campana.mensaje_sms}`);
-            enviados_sms++;
           }
-        } catch (e: any) {
-          errores.push(`SMS ${dest.nombre}: ${e.message}`);
-        }
+        } catch (e: any) { errores.push(`SMS ${dest.nombre}: ${e.message}`); }
       }
-    }
 
-    // ── Email ────────────────────────────────────────────────────────
-    if ((campana.tipo_canal === 'EMAIL' || campana.tipo_canal === 'AMBOS') && campana.mensaje_email && dest.email) {
-      try {
-        // TODO: integrar proveedor de email (SendGrid / Nodemailer)
-        console.log(`[EMAIL DEV] → ${dest.email} (${dest.nombre}): ${campana.mensaje_email}`);
-        enviados_email++;
-      } catch (e: any) {
-        errores.push(`Email ${dest.nombre}: ${e.message}`);
+      // ── Email ────────────────────────────────────────────────────────
+      if ((campana.tipo_canal === 'EMAIL' || campana.tipo_canal === 'AMBOS') && campana.mensaje_email && dest.email) {
+        try {
+          enviados_email++;
+        } catch (e: any) { errores.push(`Email ${dest.nombre}: ${e.message}`); }
       }
-    }
+    }));
   }
 
   // ─── Actualizar estadísticas ────────────────────────────────────
