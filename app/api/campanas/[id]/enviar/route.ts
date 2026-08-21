@@ -26,7 +26,7 @@ export async function POST(
   try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
 
   const queryParams: any[] = [];
-  let where = "WHERE telefonos IS NOT NULL AND telefonos != ''";
+  let where = "WHERE 1=1";
 
   if (campana.filtro_zona) {
     where += ' AND zona = ?';
@@ -44,6 +44,9 @@ export async function POST(
       nombres || ' ' || apellidos AS nombre,
       telefonos,
       email,
+      observaciones_demanda_inducida,
+      observacion,
+      datos_especificos,
       municipio
     FROM demanda_inducida
     ${where}
@@ -59,18 +62,19 @@ export async function POST(
   for (const dest of destinatarios) {
     // ── SMS ─────────────────────────────────────────────────────────
     if ((campana.tipo_canal === 'SMS' || campana.tipo_canal === 'AMBOS') && campana.mensaje_sms) {
-      // El campo telefonos puede tener múltiples números separados por coma o /
-      const telefonos: string[] = String(dest.telefonos ?? '')
-        .split(/[,\/;]+/)
-        .map((t: string) => t.trim())
-        .filter(Boolean);
+      
+      const fullText = [
+        dest.telefonos, dest.email, dest.observaciones_demanda_inducida,
+        dest.observacion, dest.datos_especificos
+      ].filter(Boolean).join(' ');
 
-      for (const telRaw of telefonos) {
+      // Extraer números válidos de celular Colombia (10 dígitos que empiecen por 3)
+      const matches = fullText.match(/3\d{9}/g) || [];
+      const telefonosValidos = [...new Set(matches)]; // Únicos
+
+      for (const numeroRaw of telefonosValidos) {
         try {
-          // Normalizar: solo dígitos, agregar 57 si es colombiano (10 dígitos)
-          let numero = telRaw.replace(/\D/g, '');
-          if (numero.length === 10) numero = `57${numero}`;
-          if (numero.length < 10) continue; // inválido
+          const numero = `57${numeroRaw}`;
 
           if (ONURIX_CLIENT && ONURIX_KEY) {
             const body = new URLSearchParams({

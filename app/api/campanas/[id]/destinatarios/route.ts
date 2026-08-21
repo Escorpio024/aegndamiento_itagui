@@ -22,7 +22,7 @@ export async function GET(
   try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
 
   const queryParams: any[] = [];
-  let where = "WHERE d.telefonos IS NOT NULL AND d.telefonos != ''";
+  let where = "WHERE 1=1";
 
   if (campana.filtro_zona) {
     where += ' AND d.zona = ?';
@@ -34,19 +34,47 @@ export async function GET(
     queryParams.push(...municipios);
   }
 
-  const rows = await db.prepare(`
+  const rawRows = await db.prepare(`
     SELECT
       d.numero_identificacion AS documento,
       d.nombres || ' ' || d.apellidos AS nombre,
-      d.telefonos AS telefono,
+      d.telefonos,
       d.email,
+      d.observaciones_demanda_inducida,
+      d.observacion,
+      d.datos_especificos,
       d.zona,
       d.municipio,
       d.tipo_examen
     FROM demanda_inducida d
     ${where}
     ORDER BY d.zona, d.municipio, d.apellidos
-  `).all(...queryParams);
+  `).all(...queryParams) as any[];
+
+  // ─── Extraer teléfonos de múltiples campos usando Regex ─────────────────
+  const rows = [];
+  for (const row of rawRows) {
+    const fullText = [
+      row.telefonos, row.email, row.observaciones_demanda_inducida,
+      row.observacion, row.datos_especificos
+    ].filter(Boolean).join(' ');
+
+    // Buscar secuencias de 10 dígitos que empiecen por 3 (formato celular Colombia)
+    const matches = fullText.match(/3\d{9}/g) || [];
+    const telefonosValidos = [...new Set(matches)]; // Únicos
+
+    if (telefonosValidos.length > 0) {
+      rows.push({
+        documento: row.documento,
+        nombre: row.nombre,
+        telefono: telefonosValidos.join(', '), // Mostrar todos los encontrados
+        email: row.email,
+        zona: row.zona,
+        municipio: row.municipio,
+        tipo_examen: row.tipo_examen,
+      });
+    }
+  }
 
   return NextResponse.json(rows);
 }

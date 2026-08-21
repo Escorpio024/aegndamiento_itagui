@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
   // ─── Contar destinatarios desde demanda_inducida ───────────────
   const params: any[] = [];
-  let where = "WHERE telefonos IS NOT NULL AND telefonos != ''";
+  let where = "WHERE 1=1";
 
   if (filtro_zona) {
     where += ' AND zona = ?';
