@@ -14,13 +14,31 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
-  // Login form — password se autorrellena con la cédula por defecto
+  // Login form
   const [loginData, setLoginData] = useState({ documento: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [checkingDoc, setCheckingDoc] = useState(false);
   // Register form
   const [regData, setRegData] = useState({
     nombre:'', documento:'', tipoDoc:'CC', telefono:'', email:'', regimen:'CONTRIBUTIVO'
   });
+
+  // Al salir del campo cédula, verificamos si necesita contraseña personalizada
+  const handleDocumentoBlur = async () => {
+    const doc = loginData.documento.trim();
+    if (!doc) return;
+    setCheckingDoc(true);
+    try {
+      const r = await fetch(`/api/auth/login?documento=${encodeURIComponent(doc)}`);
+      const data = await r.json();
+      if (data.needsPassword) {
+        setShowPassword(true);
+      } else {
+        setShowPassword(false);
+      }
+    } catch { /* silencioso */ }
+    finally { setCheckingDoc(false); }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setLoading(true);
@@ -90,15 +108,23 @@ function LoginContent() {
           <form className="auth-form" onSubmit={handleLogin}>
             <div className="form-group">
               <label className="form-label">Número de cédula <span className="req">*</span></label>
-              <input type="text" className="form-control" placeholder="Ej: 43062876"
-                value={loginData.documento}
-                onChange={e => setLoginData(d => ({ ...d, documento: e.target.value }))}
-                required autoFocus />
+              <div style={{ position: 'relative' }}>
+                <input type="text" className="form-control" placeholder="Ej: 43062876"
+                  value={loginData.documento}
+                  onChange={e => { setLoginData(d => ({ ...d, documento: e.target.value })); setShowPassword(false); }}
+                  onBlur={handleDocumentoBlur}
+                  required autoFocus />
+                {checkingDoc && (
+                  <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-3)' }}>
+                    verificando...
+                  </span>
+                )}
+              </div>
             </div>
 
             {showPassword && (
-              <div className="form-group">
-                <label className="form-label">Contraseña personalizada <span className="req">*</span></label>
+              <div className="form-group" style={{ animation: 'fadeIn 0.2s ease' }}>
+                <label className="form-label">Contraseña <span className="req">*</span></label>
                 <input type="password" className="form-control" placeholder="Tu contraseña"
                   value={loginData.password}
                   onChange={e => setLoginData(d => ({ ...d, password: e.target.value }))}
@@ -110,13 +136,11 @@ function LoginContent() {
               {loading ? <><span className="spinner spinner-sm" /> Iniciando sesión...</> : '→ Iniciar sesión'}
             </button>
 
-            <button
-              type="button"
-              style={{ background:'none', border:'none', color:'var(--text-3)', fontSize:'0.8rem', cursor:'pointer', marginTop:8, textDecoration:'underline', textDecorationStyle:'dotted' }}
-              onClick={() => { setShowPassword(p => !p); setLoginData(d => ({ ...d, password: '' })); }}
-            >
-              {showPassword ? '← Usar cédula como contraseña' : '¿Ya cambiaste tu contraseña? Ingrésala aquí'}
-            </button>
+            {!showPassword && (
+              <p style={{ fontSize:'0.78rem', color:'var(--text-3)', margin:'-4px 0 8px', textAlign:'center' }}>
+                Ingresa tu cédula y haz clic en el botón para continuar
+              </p>
+            )}
           </form>
         )}
 
