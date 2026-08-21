@@ -34,23 +34,26 @@ export async function GET(
     queryParams.push(...municipios);
   }
 
-  const rawRows = await db.prepare(`
-    SELECT
-      d.numero_identificacion AS documento,
-      d.nombres || ' ' || d.apellidos AS nombre,
-      d.telefonos,
-      d.email,
-      d.observaciones_demanda_inducida,
-      d.observacion,
-      d.datos_especificos,
-      d.zona,
-      d.municipio,
-      d.tipo_examen
-    FROM demanda_inducida d
-    ${where}
-    ORDER BY d.zona, d.municipio, d.apellidos
-    LIMIT 100
-  `).all(...queryParams) as any[];
+  let rawRows: any[] = [];
+  if (campana.filtro_zona || municipios.length > 0) {
+    rawRows = await db.prepare(`
+      SELECT
+        d.numero_identificacion AS documento,
+        d.nombres || ' ' || d.apellidos AS nombre,
+        d.telefonos,
+        d.email,
+        d.observaciones_demanda_inducida,
+        d.observacion,
+        d.datos_especificos,
+        d.zona,
+        d.municipio,
+        d.tipo_examen
+      FROM demanda_inducida d
+      ${where}
+      ORDER BY d.zona, d.municipio, d.apellidos
+      LIMIT 100
+    `).all(...queryParams) as any[];
+  }
 
   // ─── Agregar teléfonos de prueba al principio ───────────────────────────
   if (campana.telefonos_prueba) {

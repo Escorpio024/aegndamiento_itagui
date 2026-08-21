@@ -106,14 +106,26 @@ export async function POST(
               sms:     campana.mensaje_sms,
             });
 
-            const smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept':       'application/json',
-              },
-              body: body.toString(),
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+            
+            let smsRes;
+            try {
+              smsRes = await fetch('https://www.onurix.com/api/v1/sms/send', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Accept':       'application/json',
+                },
+                body: body.toString(),
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+            } catch (err: any) {
+              clearTimeout(timeoutId);
+              errores.push(`SMS ${dest.nombre} (${numero}): Error de conexión o Timeout (${err.message})`);
+              continue;
+            }
 
             const respText = await smsRes.text();
             let respJson: any = {};
