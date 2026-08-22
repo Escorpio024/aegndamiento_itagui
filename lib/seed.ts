@@ -157,7 +157,28 @@ export async function runSeed(): Promise<void> {
     )
   `);
 
-  // ─── Admin ────────────────────────────────────────────────────
+  // ─── Índices de rendimiento ────────────────────────────────────────────────
+  // Turso/SQLite: reduce filas leídas en consultas frecuentes → menos créditos consumidos
+
+  // horarios: filtros por sede, doctor y fecha (panel admin y búsqueda de turnos)
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_horarios_fecha      ON horarios(fecha)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_horarios_sede       ON horarios(sede_id)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_horarios_doctor     ON horarios(doctor_id)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_horarios_disponible ON horarios(disponible)`);
+
+  // citas: filtros por usuario, estado y sede (panel admin y vista paciente)
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_citas_usuario ON citas(usuario_id)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_citas_estado  ON citas(estado)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_citas_sede    ON citas(sede_id)`);
+
+  // demanda_inducida: filtros por municipio y zona (campañas SMS masivas)
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_di_municipio ON demanda_inducida(municipio)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_di_zona      ON demanda_inducida(zona)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_di_sms       ON demanda_inducida(sms_enviado)`);
+  // Índice compuesto para la consulta más frecuente de campañas (municipio + zona juntos)
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_di_municipio_zona ON demanda_inducida(municipio, zona)`);
+
+
   const adminExists = await db.prepare("SELECT id FROM usuarios WHERE email = 'admin@itagui.gov.co'").get();
   if (!adminExists) {
     await db.prepare(
