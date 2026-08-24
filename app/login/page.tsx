@@ -22,6 +22,7 @@ function LoginContent() {
   const [regData, setRegData] = useState({
     nombre:'', documento:'', tipoDoc:'CC', telefono:'', email:'', regimen:'CONTRIBUTIVO'
   });
+  const [checkingRegDoc, setCheckingRegDoc] = useState(false);
 
   // Al salir del campo cédula, verificamos si necesita contraseña personalizada
   const handleDocumentoBlur = async () => {
@@ -38,6 +39,29 @@ function LoginContent() {
       }
     } catch { /* silencioso */ }
     finally { setCheckingDoc(false); }
+  };
+
+  // Autocompletar datos de registro si el paciente existe en demanda_inducida
+  const handleRegDocumentoBlur = async () => {
+    const doc = regData.documento.trim();
+    if (!doc) return;
+    setCheckingRegDoc(true);
+    try {
+      const r = await fetch(`/api/auth/check-document?documento=${encodeURIComponent(doc)}`);
+      const data = await r.json();
+      if (data.found && data.data) {
+        setRegData(prev => ({
+          ...prev,
+          nombre: prev.nombre || data.data.nombre,
+          tipoDoc: data.data.tipoDoc || prev.tipoDoc,
+          telefono: prev.telefono || data.data.telefono,
+          email: prev.email || data.data.email,
+          regimen: data.data.regimen || prev.regimen
+        }));
+        toast('Datos encontrados. Por favor verifica que sean correctos.', 'info');
+      }
+    } catch { /* silencioso */ }
+    finally { setCheckingRegDoc(false); }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -161,8 +185,18 @@ function LoginContent() {
               </div>
               <div className="form-group">
                 <label className="form-label">N° documento <span className="req">*</span></label>
-                <input type="text" className="form-control" placeholder="1234567890"
-                  value={regData.documento} onChange={e => setRegData(d => ({ ...d, documento:e.target.value }))} required />
+                <div style={{ position: 'relative' }}>
+                  <input type="text" className="form-control" placeholder="1234567890"
+                    value={regData.documento} 
+                    onChange={e => setRegData(d => ({ ...d, documento:e.target.value }))}
+                    onBlur={handleRegDocumentoBlur}
+                    required />
+                  {checkingRegDoc && (
+                    <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-3)' }}>
+                      buscando...
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="form-grid">
