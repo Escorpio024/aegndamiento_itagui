@@ -37,7 +37,12 @@ export default function MisCitasPage() {
 
   const load = () => {
     setLoading(true);
-    fetch('/api/citas').then(r => r.json()).then(d => { setCitas(Array.isArray(d) ? d : []); }).finally(() => setLoading(false));
+    fetch('/api/citas')
+      .then(r => r.json())
+      .then(d => { 
+        setCitas(Array.isArray(d) ? d.filter((c: Cita) => c.estado !== 'CANCELADA') : []); 
+      })
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
