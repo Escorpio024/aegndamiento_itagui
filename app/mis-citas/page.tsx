@@ -82,16 +82,15 @@ export default function MisCitasPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid-4" style={{ marginBottom:32 }}>
+        <div className="grid-3" style={{ marginBottom:32 }}>
           <div className="stat-card"><div className="stat-icon blue">📋</div><div><div className="stat-value">{stats.total}</div><div className="stat-label">Total Citas</div></div></div>
           <div className="stat-card"><div className="stat-icon warn">🕐</div><div><div className="stat-value">{stats.pendiente}</div><div className="stat-label">Pendientes</div></div></div>
           <div className="stat-card"><div className="stat-icon succ">✅</div><div><div className="stat-value">{stats.confirmada}</div><div className="stat-label">Confirmadas</div></div></div>
-          <div className="stat-card"><div className="stat-icon err">❌</div><div><div className="stat-value">{stats.cancelada}</div><div className="stat-label">Canceladas</div></div></div>
         </div>
 
         {/* Filters */}
         <div className="flex gap-2" style={{ marginBottom:24, flexWrap:'wrap' }}>
-          {['', 'PENDIENTE', 'CONFIRMADA', 'CANCELADA', 'COMPLETADA'].map(f => (
+          {['', 'PENDIENTE', 'CONFIRMADA', 'COMPLETADA'].map(f => (
             <button key={f} onClick={() => setFiltro(f)}
               className={`btn btn-sm ${filtro === f ? 'btn-primary' : 'btn-outline'}`}>
               {f || 'Todas'} {f && stats[f.toLowerCase() as keyof typeof stats] !== undefined ? `(${stats[f.toLowerCase() as keyof typeof stats]})` : ''}
