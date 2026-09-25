@@ -58,10 +58,19 @@ export async function GET() {
     municipios: data.municipios.sort((a, b) => a.nombre.localeCompare(b.nombre)),
   }));
 
+  // ── Tipos de Examen disponibles ───────────────────────────────────────────
+  const examenRows = await db.prepare(`
+    SELECT tipo_examen, COUNT(*) as total
+    FROM demanda_inducida
+    WHERE tipo_examen IS NOT NULL AND tipo_examen != ''
+    GROUP BY tipo_examen
+    ORDER BY tipo_examen
+  `).all() as { tipo_examen: string; total: number }[];
+
   return NextResponse.json({
     zonas,
-    // Lista plana de todos los municipios únicos (para el selector sin filtro de zona)
     municipios: municipiosUnicos,
+    tipos_examen: examenRows,
     totales: {
       zonas: zonas.length,
       municipios: municipiosUnicos.length,

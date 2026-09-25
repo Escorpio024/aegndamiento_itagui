@@ -105,6 +105,9 @@ export async function runSeed(): Promise<void> {
   if (!colNames.includes('telefonos_prueba')) {
     await db.exec('ALTER TABLE campanas ADD COLUMN telefonos_prueba TEXT');
   }
+  if (!colNames.includes('filtro_tipo_examen')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN filtro_tipo_examen TEXT');
+  }
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS citas (

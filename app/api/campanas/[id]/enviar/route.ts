@@ -49,9 +49,13 @@ export async function POST(
     where += ` AND municipio IN (${placeholders})`;
     queryParams.push(...municipios);
   }
+  if (campana.filtro_tipo_examen) {
+    where += ' AND tipo_examen = ?';
+    queryParams.push(campana.filtro_tipo_examen);
+  }
 
   let todosDestinatarios: any[] = [];
-  if (campana.filtro_zona || municipios.length > 0) {
+  if (campana.filtro_zona || municipios.length > 0 || campana.filtro_tipo_examen) {
     todosDestinatarios = await db.prepare(`
       SELECT DISTINCT
         numero_identificacion,

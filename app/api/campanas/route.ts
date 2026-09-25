@@ -13,6 +13,7 @@ export async function GET() {
   const rows = await db.prepare(`
     SELECT id, nombre, mensaje_sms, mensaje_email, tipo_canal, estado,
            filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita,
+           filtro_tipo_examen,
            total_destinatarios, enviados_sms, enviados_email, created_at
     FROM campanas
     ORDER BY created_at DESC
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const {
     nombre, mensaje_sms, mensaje_email, tipo_canal,
-    filtro_zona, filtro_municipios,
+    filtro_zona, filtro_municipios, filtro_tipo_examen,
     filtro_sede_id, filtro_estado_cita, telefonos_prueba
   } = body;
 
@@ -59,6 +60,10 @@ export async function POST(req: Request) {
     where += ` AND municipio IN (${placeholders})`;
     params.push(...filtro_municipios);
   }
+  if (filtro_tipo_examen) {
+    where += ' AND tipo_examen = ?';
+    params.push(filtro_tipo_examen);
+  }
 
   const countRow = await db.prepare(`
     SELECT COUNT(DISTINCT numero_identificacion) as total
@@ -72,13 +77,14 @@ export async function POST(req: Request) {
     INSERT INTO campanas (
       nombre, mensaje_sms, mensaje_email, tipo_canal, estado,
       filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita, telefonos_prueba,
-      total_destinatarios
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      filtro_tipo_examen, total_destinatarios
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     nombre, mensaje_sms, mensaje_email, tipo_canal, 'PENDIENTE',
     filtro_zona || null, JSON.stringify(filtro_municipios) || '[]',
     filtro_sede_id || null, filtro_estado_cita || null,
     telefonos_prueba || null,
+    filtro_tipo_examen || null,
     total
   );
 

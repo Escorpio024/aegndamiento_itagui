@@ -33,6 +33,10 @@ export async function GET(
     where += ` AND d.municipio IN (${placeholders})`;
     queryParams.push(...municipios);
   }
+  if (campana.filtro_tipo_examen) {
+    where += ' AND d.tipo_examen = ?';
+    queryParams.push(campana.filtro_tipo_examen);
+  }
 
   let rawRows: any[] = [];
   if (campana.filtro_zona || municipios.length > 0) {
