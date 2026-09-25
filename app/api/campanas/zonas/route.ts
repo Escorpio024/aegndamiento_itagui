@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/campanas/zonas — zonas y municipios disponibles en demanda_inducida
 export async function GET(req: Request) {
   const url = new URL(req.url);
