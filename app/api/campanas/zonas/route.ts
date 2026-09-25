@@ -3,7 +3,9 @@ import db from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 
 // GET /api/campanas/zonas — zonas y municipios disponibles en demanda_inducida
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const tipoExamen = url.searchParams.get('tipo_examen');
   try {
     await requireAdmin();
   } catch {
@@ -11,23 +13,35 @@ export async function GET() {
   }
 
   // ── Zonas con su total de pacientes ────────────────────────────────────────
-  const zonaRows = await db.prepare(`
+  let queryZonas = `
     SELECT zona, COUNT(*) as total
     FROM demanda_inducida
     WHERE zona IS NOT NULL AND zona != ''
-    GROUP BY zona
-    ORDER BY total DESC
-  `).all() as { zona: string; total: number }[];
+  `;
+  const paramsZonas: any[] = [];
+  if (tipoExamen) {
+    queryZonas += ` AND tipo_examen = ?`;
+    paramsZonas.push(tipoExamen);
+  }
+  queryZonas += ` GROUP BY zona ORDER BY total DESC`;
+
+  const zonaRows = await db.prepare(queryZonas).all(...paramsZonas) as { zona: string; total: number }[];
 
   // ── Todos los municipios únicos con su total ────────────────────────────────
   // (Sin filtrar por zona para que el admin vea siempre los 127 municipios)
-  const municipioRows = await db.prepare(`
+  let queryMuns = `
     SELECT municipio, zona, COUNT(*) as total
     FROM demanda_inducida
     WHERE municipio IS NOT NULL AND municipio != ''
-    GROUP BY municipio, zona
-    ORDER BY municipio
-  `).all() as { municipio: string; zona: string; total: number }[];
+  `;
+  const paramsMuns: any[] = [];
+  if (tipoExamen) {
+    queryMuns += ` AND tipo_examen = ?`;
+    paramsMuns.push(tipoExamen);
+  }
+  queryMuns += ` GROUP BY municipio, zona ORDER BY municipio`;
+
+  const municipioRows = await db.prepare(queryMuns).all(...paramsMuns) as { municipio: string; zona: string; total: number }[];
 
   // Agregar municipios únicos (un municipio puede aparecer en varias zonas)
   const municipioMap: Record<string, number> = {};

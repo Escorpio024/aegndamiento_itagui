@@ -177,6 +177,17 @@ export default function AdminPage() {
     } catch (e:any) { toast(e.message, 'error'); }
   };
 
+  const loadZonasYMunicipiosFiltrados = async (tipo_examen: string) => {
+    try {
+      const q = tipo_examen ? `?tipo_examen=${encodeURIComponent(tipo_examen)}` : '';
+      const data = await api('GET', `/api/campanas/zonas${q}`);
+      setZonas(data.zonas || []);
+      setMunicipiosAll(data.municipios || []);
+    } catch (e) {
+      console.error('Error cargando zonas filtradas', e);
+    }
+  };
+
   // Contar destinatarios al cambiar zona/municipios/tipo_examen
   const contarDestinatarios = async (zona: string, municipios: string[], tipo_examen: string) => {
     if (municipios.length === 0 && !tipo_examen && !zona) { setContandoDest(0); return; }
@@ -645,8 +656,9 @@ export default function AdminPage() {
               <div className="form-group"><label className="form-label">Filtro: Tipo de Examen</label>
                 <select className="form-control" value={campanaForm.filtro_tipo_examen} onChange={e => {
                   const val = e.target.value;
-                  setCampanaForm(f=>({...f, filtro_tipo_examen: val}));
-                  contarDestinatarios(campanaForm.filtro_zona, campanaForm.filtro_municipios, val);
+                  setCampanaForm(f=>({...f, filtro_tipo_examen: val, filtro_municipios: [], filtro_zona: ''}));
+                  loadZonasYMunicipiosFiltrados(val);
+                  contarDestinatarios('', [], val);
                 }}>
                   <option value="">Todos los exámenes</option>
                   {tiposExamen.map(t => (
