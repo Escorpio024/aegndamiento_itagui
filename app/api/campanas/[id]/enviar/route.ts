@@ -58,35 +58,20 @@ export async function POST(
     queryParams.push(...tipos_examen);
   }
 
-  let todosDestinatarios: any[] = [];
+  // 1. Calcular cuántos teléfonos de prueba hay
+  const pruebasRaw = campana.telefonos_prueba ? campana.telefonos_prueba.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+  const P = pruebasRaw.length;
   
-  if (campana.destinatarios_ids) {
-    // Si hay un límite guardado, solo consultamos esos IDs específicos
-    const ids = JSON.parse(campana.destinatarios_ids);
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',');
-      todosDestinatarios = await db.prepare(`
-        SELECT DISTINCT
-          numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
-        FROM demanda_inducida
-        WHERE numero_identificacion IN (${placeholders})
-      `).all(...ids) as any[];
-    }
-  } else if (campana.filtro_zona || municipios.length > 0 || tipos_examen.length > 0) {
-    todosDestinatarios = await db.prepare(`
-      SELECT DISTINCT
-        numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
-      FROM demanda_inducida
-      ${where}
-    `).all(...queryParams) as any[];
-  }
-
-  // Agregar teléfonos de prueba (solo en el primer lote)
-  const pruebaDestinatarios: any[] = [];
-  if (offset === 0 && campana.telefonos_prueba) {
-    const pruebas = campana.telefonos_prueba.split(',').map((t: string) => t.trim()).filter(Boolean);
-    for (const num of pruebas) {
-      pruebaDestinatarios.push({
+  // 2. Calcular paginación para SQL
+  let sqlLimit = limit;
+  let sqlOffset = 0;
+  const chunk: any[] = [];
+  
+  // 3. Añadir teléfonos de prueba si caen en este bloque (offset)
+  if (offset < P) {
+    const pruebasToTake = pruebasRaw.slice(offset, offset + limit);
+    for (const num of pruebasToTake) {
+      chunk.push({
         numero_identificacion: 'PRUEBA',
         nombre: 'Usuario de Prueba',
         telefonos: num,
@@ -97,14 +82,46 @@ export async function POST(
         municipio: 'PRUEBA',
       });
     }
+    sqlLimit = limit - pruebasToTake.length;
+    sqlOffset = 0;
+  } else {
+    sqlLimit = limit;
+    sqlOffset = offset - P;
+  }
+  
+  // 4. Hacer la consulta a DB con LIMIT y OFFSET
+  if (sqlLimit > 0) {
+    let sqlChunk: any[] = [];
+    if (campana.destinatarios_ids) {
+      const ids = JSON.parse(campana.destinatarios_ids);
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        sqlChunk = await db.prepare(`
+          SELECT
+            numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
+          FROM demanda_inducida
+          WHERE numero_identificacion IN (${placeholders})
+          GROUP BY numero_identificacion
+          ORDER BY numero_identificacion
+          LIMIT ? OFFSET ?
+        `).all(...ids, sqlLimit, sqlOffset) as any[];
+      }
+    } else if (campana.filtro_zona || municipios.length > 0 || tipos_examen.length > 0) {
+      sqlChunk = await db.prepare(`
+        SELECT
+          numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
+        FROM demanda_inducida
+        ${where}
+        GROUP BY numero_identificacion
+        ORDER BY numero_identificacion
+        LIMIT ? OFFSET ?
+      `).all(...queryParams, sqlLimit, sqlOffset) as any[];
+    }
+    chunk.push(...sqlChunk);
   }
 
-  const total = todosDestinatarios.length + (campana.telefonos_prueba ? campana.telefonos_prueba.split(',').filter((t:string) => t.trim()).length : 0);
-
-  // Paginar: tomar solo la porción que procesa esta llamada
-  const allDests = [...pruebaDestinatarios, ...todosDestinatarios];
-  const chunk    = allDests.slice(offset, offset + limit);
-  const done     = offset + limit >= allDests.length;
+  const total = campana.total_destinatarios + P;
+  const done  = offset + limit >= total;
 
   const ONURIX_CLIENT = process.env.ONURIX_CLIENT ?? '';
   const ONURIX_KEY    = process.env.ONURIX_KEY    ?? '';

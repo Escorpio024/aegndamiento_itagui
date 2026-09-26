@@ -53,6 +53,7 @@ export async function GET(
         SELECT d.numero_identificacion AS documento, d.nombres || ' ' || d.apellidos AS nombre, d.telefonos, d.email, d.observaciones_demanda_inducida, d.observacion, d.datos_especificos, d.zona, d.municipio, d.tipo_examen
         FROM demanda_inducida d
         WHERE d.numero_identificacion IN (${placeholders})
+        GROUP BY d.numero_identificacion
         ORDER BY d.zona, d.municipio, d.apellidos
       `).all(...previewIds) as any[];
     }
@@ -61,6 +62,7 @@ export async function GET(
       SELECT d.numero_identificacion AS documento, d.nombres || ' ' || d.apellidos AS nombre, d.telefonos, d.email, d.observaciones_demanda_inducida, d.observacion, d.datos_especificos, d.zona, d.municipio, d.tipo_examen
       FROM demanda_inducida d
       ${where}
+      GROUP BY d.numero_identificacion
       ORDER BY d.zona, d.municipio, d.apellidos
       LIMIT 100
     `).all(...queryParams) as any[];
