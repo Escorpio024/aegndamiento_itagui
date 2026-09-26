@@ -203,11 +203,10 @@ export async function POST(
     SET
       enviados_sms   = enviados_sms   + ?,
       enviados_email = enviados_email + ?,
-      total_destinatarios = ?,
       estado = CASE WHEN ? THEN 'ENVIADA' ELSE estado END,
       sent_at = CASE WHEN ? THEN datetime('now','localtime') ELSE sent_at END
     WHERE id = ?
-  `).run(enviados_sms, enviados_email, total, done ? 1 : 0, done ? 1 : 0, id);
+  `).run(enviados_sms, enviados_email, done ? 1 : 0, done ? 1 : 0, id);
 
   return NextResponse.json({
     ok: true,
