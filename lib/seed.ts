@@ -108,6 +108,12 @@ export async function runSeed(): Promise<void> {
   if (!colNames.includes('filtro_tipo_examen')) {
     await db.exec('ALTER TABLE campanas ADD COLUMN filtro_tipo_examen TEXT');
   }
+  if (!colNames.includes('limite_envios')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN limite_envios INTEGER');
+  }
+  if (!colNames.includes('destinatarios_ids')) {
+    await db.exec('ALTER TABLE campanas ADD COLUMN destinatarios_ids TEXT');
+  }
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS citas (

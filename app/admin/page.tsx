@@ -8,7 +8,7 @@ interface Doctor  { id:number; nombre:string; especialidad:string; activo:number
 interface Horario { id:number; sede_id:number; doctor_id:number; fecha:string; hora_inicio:string; hora_fin:string; disponible:number; sede_nombre:string; doctor_nombre:string; cita_id?:number; cita_estado?:string; paciente_nombre?:string; }
 interface Proc    { id:number; cups:string; nombre:string; modalidad:string; contraste:string; activo:number; }
 interface Cita    { id:number; estado:string; paciente_nombre:string; documento:string; procedimiento_nombre:string; cups:string; sede_nombre:string; fecha:string; hora_inicio:string; hora_fin:string; doctor_nombre:string; created_at:string; }
-interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; filtro_tipo_examen:string|null; telefonos_prueba:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
+interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; filtro_tipo_examen:string|null; limite_envios:number|null; telefonos_prueba:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
 interface Destinatario { nombre:string; telefono:string; email:string; documento:string; zona:string; municipio:string; tipo_examen:string; }
 interface ZonaInfo { nombre:string; total:number; municipios:{ nombre:string; total:number }[]; }
 
@@ -42,7 +42,7 @@ export default function AdminPage() {
 
   // Campaña form
   const [modalCampana, setModalCampana] = useState(false);
-  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[] as string[], filtro_sede_id:'', filtro_estado_cita:'', filtro_tipo_examen:'', telefonos_prueba:'' });
+  const [campanaForm,  setCampanaForm]  = useState({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[] as string[], filtro_sede_id:'', filtro_estado_cita:'', filtro_tipo_examen:[] as string[], limite_envios:'', telefonos_prueba:'' });
   const [campanaSeleccionada, setCampanaSeleccionada] = useState<Campana|null>(null);
   const [zonas,           setZonas]           = useState<ZonaInfo[]>([]);
   const [municipiosAll,   setMunicipiosAll]   = useState<{nombre:string, total:number}[]>([]);
@@ -171,15 +171,15 @@ export default function AdminPage() {
       const r = await api('POST', '/api/campanas', campanaForm);
       toast(`✅ Campaña creada. ${r.total_destinatarios} destinatarios encontrados.`, 'success');
       setModalCampana(false);
-      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[], filtro_sede_id:'', filtro_estado_cita:'', filtro_tipo_examen:'', telefonos_prueba:'' });
+      setCampanaForm({ nombre:'', mensaje_sms:'', mensaje_email:'', tipo_canal:'SMS', filtro_zona:'', filtro_municipios:[], filtro_sede_id:'', filtro_estado_cita:'', filtro_tipo_examen:[], limite_envios:'', telefonos_prueba:'' });
       setContandoDest(0);
       load();
     } catch (e:any) { toast(e.message, 'error'); }
   };
 
-  const loadZonasYMunicipiosFiltrados = async (tipo_examen: string) => {
+  const loadZonasYMunicipiosFiltrados = async (tipos_examen: string[]) => {
     try {
-      const q = tipo_examen ? `?tipo_examen=${encodeURIComponent(tipo_examen)}` : '';
+      const q = tipos_examen.length > 0 ? `?tipo_examen=${encodeURIComponent(tipos_examen.join(','))}` : '';
       const data = await api('GET', `/api/campanas/zonas${q}`);
       setZonas(data.zonas || []);
       setMunicipiosAll(data.municipios || []);
@@ -188,14 +188,14 @@ export default function AdminPage() {
     }
   };
 
-  // Contar destinatarios al cambiar zona/municipios/tipo_examen
-  const contarDestinatarios = async (zona: string, municipios: string[], tipo_examen: string) => {
-    if (municipios.length === 0 && !tipo_examen && !zona) { setContandoDest(0); return; }
+  // Contar destinatarios al cambiar zona/municipios/tipo_examen/limite
+  const contarDestinatarios = async (zona: string, municipios: string[], tipos_examen: string[], limite_envios: string) => {
+    if (municipios.length === 0 && tipos_examen.length === 0 && !zona) { setContandoDest(0); return; }
     setConteoLoading(true);
     try {
       const r = await api('POST', '/api/campanas', {
         nombre: '__preview__', tipo_canal:'SMS', mensaje_sms: 'x',
-        filtro_zona: zona, filtro_municipios: municipios, filtro_tipo_examen: tipo_examen,
+        filtro_zona: zona, filtro_municipios: municipios, filtro_tipo_examen: tipos_examen, limite_envios
       });
       setContandoDest(r.total_destinatarios);
       // Borrar el preview inmediatamente para no llenar la BD de basura
@@ -652,19 +652,53 @@ export default function AdminPage() {
               <div className="form-group"><label className="form-label">Nombre de la campaña *</label>
                 <input className="form-control" placeholder="Ej: Recordatorio toma citología agosto" value={campanaForm.nombre} onChange={e => setCampanaForm(f=>({...f,nombre:e.target.value}))} /></div>
 
-              {/* Tipo Examen */}
-              <div className="form-group"><label className="form-label">Filtro: Tipo de Examen</label>
-                <select className="form-control" value={campanaForm.filtro_tipo_examen} onChange={e => {
-                  const val = e.target.value;
-                  setCampanaForm(f=>({...f, filtro_tipo_examen: val, filtro_municipios: [], filtro_zona: ''}));
-                  loadZonasYMunicipiosFiltrados(val);
-                  contarDestinatarios('', [], val);
-                }}>
-                  <option value="">Todos los exámenes</option>
-                  {tiposExamen.map(t => (
-                    <option key={t.tipo_examen} value={t.tipo_examen}>{t.tipo_examen} ({t.total.toLocaleString()})</option>
-                  ))}
-                </select>
+              {/* Tipo Examen (Múltiple) */}
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>🔬 Filtro: Tipos de Examen</span>
+                  <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem' }}>
+                    {campanaForm.filtro_tipo_examen.length === 0 ? 'Todos los exámenes' : `${campanaForm.filtro_tipo_examen.length} seleccionados`}
+                  </span>
+                </label>
+                <div className="municipios-grid" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                  {tiposExamen.map(t => {
+                    const checked = campanaForm.filtro_tipo_examen.includes(t.tipo_examen);
+                    return (
+                      <div key={t.tipo_examen} className={`municipio-item ${checked ? 'selected' : ''}`} onClick={() => {
+                        let newTipos = [...campanaForm.filtro_tipo_examen];
+                        if (checked) newTipos = newTipos.filter(x => x !== t.tipo_examen);
+                        else newTipos.push(t.tipo_examen);
+                        
+                        setCampanaForm(f => ({...f, filtro_tipo_examen: newTipos, filtro_municipios: [], filtro_zona: ''}));
+                        loadZonasYMunicipiosFiltrados(newTipos);
+                        contarDestinatarios('', [], newTipos, campanaForm.limite_envios);
+                      }}>
+                        <span className="mun-name">{t.tipo_examen}</span>
+                        <span className="mun-total">{t.total.toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Límite de envíos (Al azar) */}
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">
+                  Límite de envíos (Al azar)
+                  <span style={{ color:'var(--text-3)', fontWeight:400, fontSize:'.78rem', marginLeft:8 }}>(Opcional, ej: 600)</span>
+                </label>
+                <input 
+                  type="number" 
+                  min="1"
+                  className="form-control" 
+                  placeholder="Dejar en blanco para enviar a todos" 
+                  value={campanaForm.limite_envios} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    setCampanaForm(f => ({...f, limite_envios: val}));
+                    contarDestinatarios(campanaForm.filtro_zona, campanaForm.filtro_municipios, campanaForm.filtro_tipo_examen, val);
+                  }} 
+                />
               </div>
 
               {/* Canal */}
@@ -703,7 +737,7 @@ export default function AdminPage() {
                       const isAll = campanaForm.filtro_municipios.length === munsToRender.length;
                       const next = isAll ? [] : allMuns;
                       setCampanaForm(f => ({...f, filtro_municipios: next}));
-                      contarDestinatarios(campanaForm.filtro_zona, next, campanaForm.filtro_tipo_examen);
+                      contarDestinatarios(campanaForm.filtro_zona, next, campanaForm.filtro_tipo_examen, campanaForm.limite_envios);
                     }}>
                       {campanaForm.filtro_municipios.length === munsToRender.length ? '❌ Deseleccionar todos' : '✅ Seleccionar todos'}
                     </button>
@@ -718,7 +752,7 @@ export default function AdminPage() {
                                 ? campanaForm.filtro_municipios.filter(x => x !== m.nombre)
                                 : [...campanaForm.filtro_municipios, m.nombre];
                               setCampanaForm(f => ({...f, filtro_municipios: next}));
-                              contarDestinatarios(campanaForm.filtro_zona, next, campanaForm.filtro_tipo_examen);
+                              contarDestinatarios(campanaForm.filtro_zona, next, campanaForm.filtro_tipo_examen, campanaForm.limite_envios);
                             }}>
                             {m.nombre}
                             <span className="municipio-count">{m.total.toLocaleString()}</span>

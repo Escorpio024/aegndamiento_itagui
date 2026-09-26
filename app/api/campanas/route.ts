@@ -13,7 +13,7 @@ export async function GET() {
   const rows = await db.prepare(`
     SELECT id, nombre, mensaje_sms, mensaje_email, tipo_canal, estado,
            filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita,
-           filtro_tipo_examen,
+           filtro_tipo_examen, limite_envios,
            total_destinatarios, enviados_sms, enviados_email, created_at
     FROM campanas
     ORDER BY created_at DESC
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const {
     nombre, mensaje_sms, mensaje_email, tipo_canal,
     filtro_zona, filtro_municipios, filtro_tipo_examen,
-    filtro_sede_id, filtro_estado_cita, telefonos_prueba
+    filtro_sede_id, filtro_estado_cita, telefonos_prueba, limite_envios
   } = body;
 
   if (!nombre || !tipo_canal) {
@@ -60,31 +60,56 @@ export async function POST(req: Request) {
     where += ` AND municipio IN (${placeholders})`;
     params.push(...filtro_municipios);
   }
-  if (filtro_tipo_examen) {
-    where += ' AND tipo_examen = ?';
-    params.push(filtro_tipo_examen);
+  if (filtro_tipo_examen && Array.isArray(filtro_tipo_examen) && filtro_tipo_examen.length > 0) {
+    const placeholders = filtro_tipo_examen.map(() => '?').join(',');
+    where += ` AND tipo_examen IN (${placeholders})`;
+    params.push(...filtro_tipo_examen);
   }
 
-  const countRow = await db.prepare(`
-    SELECT COUNT(DISTINCT numero_identificacion) as total
-    FROM demanda_inducida
-    ${where}
-  `).get(...params) as any;
+  let total = 0;
+  let destinatarios_ids_json: string | null = null;
+  const limitNum = parseInt(limite_envios, 10);
 
-  const total = Number(countRow?.total ?? 0);
+  if (limitNum > 0 && nombre !== '__preview__') {
+    // Para la campaña real con límite, seleccionamos N al azar y guardamos los IDs
+    const idsRows = await db.prepare(`
+      SELECT DISTINCT numero_identificacion
+      FROM demanda_inducida
+      ${where}
+      ORDER BY RANDOM()
+      LIMIT ?
+    `).all(...params, limitNum) as any[];
+    const finalIds = idsRows.map(r => r.numero_identificacion);
+    total = finalIds.length;
+    destinatarios_ids_json = JSON.stringify(finalIds);
+  } else {
+    // Si no hay límite o es solo preview, contamos todo normal
+    const countRow = await db.prepare(`
+      SELECT COUNT(DISTINCT numero_identificacion) as total
+      FROM demanda_inducida
+      ${where}
+    `).get(...params) as any;
+    total = Number(countRow?.total ?? 0);
+    // Si es preview y hay límite, devolvemos el límite para el UI
+    if (nombre === '__preview__' && limitNum > 0 && total > limitNum) {
+      total = limitNum;
+    }
+  }
 
   const result = await db.prepare(`
     INSERT INTO campanas (
       nombre, mensaje_sms, mensaje_email, tipo_canal, estado,
       filtro_zona, filtro_municipios, filtro_sede_id, filtro_estado_cita, telefonos_prueba,
-      filtro_tipo_examen, total_destinatarios
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      filtro_tipo_examen, limite_envios, destinatarios_ids, total_destinatarios
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     nombre, mensaje_sms, mensaje_email, tipo_canal, 'PENDIENTE',
     filtro_zona || null, JSON.stringify(filtro_municipios) || '[]',
     filtro_sede_id || null, filtro_estado_cita || null,
     telefonos_prueba || null,
-    filtro_tipo_examen || null,
+    JSON.stringify(filtro_tipo_examen) || '[]',
+    limitNum > 0 ? limitNum : null,
+    destinatarios_ids_json,
     total
   );
 

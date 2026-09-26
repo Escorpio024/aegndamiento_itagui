@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 // GET /api/campanas/zonas — zonas y municipios disponibles en demanda_inducida
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const tipoExamen = url.searchParams.get('tipo_examen');
+  const tipoExamenParam = url.searchParams.get('tipo_examen');
+  const tiposExamen = tipoExamenParam ? tipoExamenParam.split(',') : [];
   try {
     await requireAdmin();
   } catch {
@@ -21,9 +22,10 @@ export async function GET(req: Request) {
     WHERE zona IS NOT NULL AND zona != ''
   `;
   const paramsZonas: any[] = [];
-  if (tipoExamen) {
-    queryZonas += ` AND tipo_examen = ?`;
-    paramsZonas.push(tipoExamen);
+  if (tiposExamen.length > 0) {
+    const ph = tiposExamen.map(() => '?').join(',');
+    queryZonas += ` AND tipo_examen IN (${ph})`;
+    paramsZonas.push(...tiposExamen);
   }
   queryZonas += ` GROUP BY zona ORDER BY total DESC`;
 
@@ -37,9 +39,10 @@ export async function GET(req: Request) {
     WHERE municipio IS NOT NULL AND municipio != ''
   `;
   const paramsMuns: any[] = [];
-  if (tipoExamen) {
-    queryMuns += ` AND tipo_examen = ?`;
-    paramsMuns.push(tipoExamen);
+  if (tiposExamen.length > 0) {
+    const ph = tiposExamen.map(() => '?').join(',');
+    queryMuns += ` AND tipo_examen IN (${ph})`;
+    paramsMuns.push(...tiposExamen);
   }
   queryMuns += ` GROUP BY municipio, zona ORDER BY municipio`;
 

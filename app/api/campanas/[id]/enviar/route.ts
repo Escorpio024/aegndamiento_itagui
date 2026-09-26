@@ -38,6 +38,9 @@ export async function POST(
   let municipios: string[] = [];
   try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
 
+  let tipos_examen: string[] = [];
+  try { tipos_examen = campana.filtro_tipo_examen ? JSON.parse(campana.filtro_tipo_examen) : []; } catch {}
+
   const queryParams: any[] = [];
   let where = 'WHERE 1=1';
   if (campana.filtro_zona) {
@@ -49,23 +52,30 @@ export async function POST(
     where += ` AND municipio IN (${placeholders})`;
     queryParams.push(...municipios);
   }
-  if (campana.filtro_tipo_examen) {
-    where += ' AND tipo_examen = ?';
-    queryParams.push(campana.filtro_tipo_examen);
+  if (tipos_examen.length > 0) {
+    const placeholders = tipos_examen.map(() => '?').join(',');
+    where += ` AND tipo_examen IN (${placeholders})`;
+    queryParams.push(...tipos_examen);
   }
 
   let todosDestinatarios: any[] = [];
-  if (campana.filtro_zona || municipios.length > 0 || campana.filtro_tipo_examen) {
+  
+  if (campana.destinatarios_ids) {
+    // Si hay un límite guardado, solo consultamos esos IDs específicos
+    const ids = JSON.parse(campana.destinatarios_ids);
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      todosDestinatarios = await db.prepare(`
+        SELECT DISTINCT
+          numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
+        FROM demanda_inducida
+        WHERE numero_identificacion IN (${placeholders})
+      `).all(...ids) as any[];
+    }
+  } else if (campana.filtro_zona || municipios.length > 0 || tipos_examen.length > 0) {
     todosDestinatarios = await db.prepare(`
       SELECT DISTINCT
-        numero_identificacion,
-        nombres || ' ' || apellidos AS nombre,
-        telefonos,
-        email,
-        observaciones_demanda_inducida,
-        observacion,
-        datos_especificos,
-        municipio
+        numero_identificacion, nombres || ' ' || apellidos AS nombre, telefonos, email, observaciones_demanda_inducida, observacion, datos_especificos, municipio
       FROM demanda_inducida
       ${where}
     `).all(...queryParams) as any[];

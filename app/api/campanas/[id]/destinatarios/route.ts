@@ -21,6 +21,9 @@ export async function GET(
   let municipios: string[] = [];
   try { municipios = campana.filtro_municipios ? JSON.parse(campana.filtro_municipios) : []; } catch {}
 
+  let tipos_examen: string[] = [];
+  try { tipos_examen = campana.filtro_tipo_examen ? JSON.parse(campana.filtro_tipo_examen) : []; } catch {}
+
   const queryParams: any[] = [];
   let where = "WHERE 1=1";
 
@@ -33,25 +36,29 @@ export async function GET(
     where += ` AND d.municipio IN (${placeholders})`;
     queryParams.push(...municipios);
   }
-  if (campana.filtro_tipo_examen) {
-    where += ' AND d.tipo_examen = ?';
-    queryParams.push(campana.filtro_tipo_examen);
+  if (tipos_examen.length > 0) {
+    const placeholders = tipos_examen.map(() => '?').join(',');
+    where += ` AND d.tipo_examen IN (${placeholders})`;
+    queryParams.push(...tipos_examen);
   }
 
   let rawRows: any[] = [];
-  if (campana.filtro_zona || municipios.length > 0) {
+  if (campana.destinatarios_ids) {
+    const ids = JSON.parse(campana.destinatarios_ids);
+    if (ids.length > 0) {
+      // Tomamos max 100 para el preview
+      const previewIds = ids.slice(0, 100);
+      const placeholders = previewIds.map(() => '?').join(',');
+      rawRows = await db.prepare(`
+        SELECT d.numero_identificacion AS documento, d.nombres || ' ' || d.apellidos AS nombre, d.telefonos, d.email, d.observaciones_demanda_inducida, d.observacion, d.datos_especificos, d.zona, d.municipio, d.tipo_examen
+        FROM demanda_inducida d
+        WHERE d.numero_identificacion IN (${placeholders})
+        ORDER BY d.zona, d.municipio, d.apellidos
+      `).all(...previewIds) as any[];
+    }
+  } else if (campana.filtro_zona || municipios.length > 0 || tipos_examen.length > 0) {
     rawRows = await db.prepare(`
-      SELECT
-        d.numero_identificacion AS documento,
-        d.nombres || ' ' || d.apellidos AS nombre,
-        d.telefonos,
-        d.email,
-        d.observaciones_demanda_inducida,
-        d.observacion,
-        d.datos_especificos,
-        d.zona,
-        d.municipio,
-        d.tipo_examen
+      SELECT d.numero_identificacion AS documento, d.nombres || ' ' || d.apellidos AS nombre, d.telefonos, d.email, d.observaciones_demanda_inducida, d.observacion, d.datos_especificos, d.zona, d.municipio, d.tipo_examen
       FROM demanda_inducida d
       ${where}
       ORDER BY d.zona, d.municipio, d.apellidos
