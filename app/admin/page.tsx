@@ -660,11 +660,11 @@ export default function AdminPage() {
                     {campanaForm.filtro_tipo_examen.length === 0 ? 'Todos los exámenes' : `${campanaForm.filtro_tipo_examen.length} seleccionados`}
                   </span>
                 </label>
-                <div className="municipios-grid" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                <div className="municipio-grid" style={{ maxHeight: '180px', overflowY: 'auto', padding: 4 }}>
                   {tiposExamen.map(t => {
                     const checked = campanaForm.filtro_tipo_examen.includes(t.tipo_examen);
                     return (
-                      <div key={t.tipo_examen} className={`municipio-item ${checked ? 'selected' : ''}`} onClick={() => {
+                      <button key={t.tipo_examen} type="button" className={`municipio-btn${checked ? ' selected' : ''}`} onClick={() => {
                         let newTipos = [...campanaForm.filtro_tipo_examen];
                         if (checked) newTipos = newTipos.filter(x => x !== t.tipo_examen);
                         else newTipos.push(t.tipo_examen);
@@ -673,9 +673,9 @@ export default function AdminPage() {
                         loadZonasYMunicipiosFiltrados(newTipos);
                         contarDestinatarios('', [], newTipos, campanaForm.limite_envios);
                       }}>
-                        <span className="mun-name">{t.tipo_examen}</span>
-                        <span className="mun-total">{t.total.toLocaleString()}</span>
-                      </div>
+                        {t.tipo_examen}
+                        <span className="municipio-count">{t.total.toLocaleString()}</span>
+                      </button>
                     );
                   })}
                 </div>
