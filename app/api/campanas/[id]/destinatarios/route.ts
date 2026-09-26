@@ -95,7 +95,8 @@ export async function GET(
 
     // Buscar secuencias de 10 dígitos que empiecen por 3 (formato celular Colombia)
     const matches = fullText.match(/3\d{9}/g) || [];
-    const telefonosValidos = [...new Set(matches)]; // Únicos
+    // Limitar a 1 celular por persona para coincidir con el límite exacto del envío final
+    const telefonosValidos = [...new Set(matches)].slice(0, 1);
 
     if (telefonosValidos.length > 0) {
       rows.push({

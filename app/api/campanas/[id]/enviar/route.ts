@@ -125,7 +125,9 @@ export async function POST(
         // MISMO algoritmo que usa /api/campanas/[id]/destinatarios (ya probado y funciona)
         // Busca cualquier secuencia de 10 dígitos que empiece por 3 (celulares colombianos)
         const matches = fullText.match(/3\d{9}/g) || [];
-        const telefonosValidos = [...new Set(matches)];
+        // Limitar a máximo 1 celular válido por persona para asegurar que si se eligen 666 personas,
+        // no se envíen más de 666 SMS, sin importar si tienen varios celulares registrados.
+        const telefonosValidos = [...new Set(matches)].slice(0, 1);
 
         // Debug: registrar si no se encontró ningún celular
         if (telefonosValidos.length === 0) {
