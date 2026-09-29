@@ -1,16 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ToastProvider';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-interface Sede    { id:number; nombre:string; direccion:string; ciudad:string; telefono:string|null; activa:number; }
-interface Doctor  { id:number; nombre:string; especialidad:string; activo:number; }
-interface Horario { id:number; sede_id:number; doctor_id:number; fecha:string; hora_inicio:string; hora_fin:string; disponible:number; sede_nombre:string; doctor_nombre:string; cita_id?:number; cita_estado?:string; paciente_nombre?:string; }
-interface Proc    { id:number; cups:string; nombre:string; modalidad:string; contraste:string; activo:number; }
-interface Cita    { id:number; estado:string; paciente_nombre:string; documento:string; procedimiento_nombre:string; cups:string; sede_nombre:string; fecha:string; hora_inicio:string; hora_fin:string; doctor_nombre:string; created_at:string; }
-interface Campana { id:number; nombre:string; mensaje_sms:string|null; mensaje_email:string|null; tipo_canal:string; estado:string; filtro_zona:string|null; filtro_municipios:string|null; filtro_sede_id:number|null; filtro_estado_cita:string|null; filtro_tipo_examen:string|null; limite_envios:number|null; telefonos_prueba:string|null; total_destinatarios:number; enviados_sms:number; enviados_email:number; created_at:string; }
-interface Destinatario { nombre:string; telefono:string; email:string; documento:string; zona:string; municipio:string; tipo_examen:string; }
-interface ZonaInfo { nombre:string; total:number; municipios:{ nombre:string; total:number }[]; }
+import SendProgressBar from '@/components/SendProgressBar';
+import type { Sede, Doctor, Horario, Proc, Cita, Campana, Destinatario, ZonaInfo, SendProgress } from '@/app/admin/types';
+import { ESTADOS, ESTADO_BADGE } from '@/app/admin/types';
 
 const SECTIONS = [
   { id:'citas',        icon:'📋', label:'Citas' },
@@ -20,9 +13,6 @@ const SECTIONS = [
   { id:'procedimientos', icon:'🫁', label:'Procedimientos' },
   { id:'campanas',     icon:'📣', label:'Campañas' },
 ];
-
-const ESTADOS = ['PENDIENTE','CONFIRMADA','CANCELADA','COMPLETADA'];
-const ESTADO_BADGE: Record<string,string> = { PENDIENTE:'badge-pendiente', CONFIRMADA:'badge-confirmada', CANCELADA:'badge-cancelada', COMPLETADA:'badge-completada' };
 
 export default function AdminPage() {
   const toast = useToast();
@@ -39,6 +29,7 @@ export default function AdminPage() {
   const [destinatarios, setDestinatarios] = useState<Destinatario[]>([]);
   const [loadingDest,   setLoadingDest]   = useState(false);
   const [enviando,      setEnviando]      = useState(false);
+  const [sendProgress,  setSendProgress]  = useState<SendProgress>({ active: false, campanaName: '', processed: 0, total: 0, sms: 0, email: 0, errors: [] });
 
   // Campaña form
   const [modalCampana, setModalCampana] = useState(false);
@@ -102,6 +93,15 @@ export default function AdminPage() {
   }, [section, filtroEstado, filtroSede, filtroFecha, horSede, horFecha]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ─── Auto-refresh JWT silencioso cada 30 minutos ─────────────────────────
+  useEffect(() => {
+    const refresh = () => fetch('/api/auth/refresh').catch(() => {});
+    refresh(); // Intentar al montar por si el token ya está por expirar
+    const id = setInterval(refresh, 30 * 60 * 1000); // cada 30min
+    return () => clearInterval(id);
+  }, []);
+
   // Load sedes, docs y zonas para selects
   useEffect(() => {
     api('GET', '/api/sedes?all=true').then(setSedes).catch(()=>{});
@@ -189,19 +189,18 @@ export default function AdminPage() {
   };
 
   // Contar destinatarios al cambiar zona/municipios/tipo_examen/limite
+  // Usa GET /api/campanas/count: solo hace un COUNT, sin crear ni borrar registros en la BD.
   const contarDestinatarios = async (zona: string, municipios: string[], tipos_examen: string[], limite_envios: string) => {
     if (municipios.length === 0 && tipos_examen.length === 0 && !zona) { setContandoDest(0); return; }
     setConteoLoading(true);
     try {
-      const r = await api('POST', '/api/campanas', {
-        nombre: '__preview__', tipo_canal:'SMS', mensaje_sms: 'x',
-        filtro_zona: zona, filtro_municipios: municipios, filtro_tipo_examen: tipos_examen, limite_envios
-      });
-      setContandoDest(r.total_destinatarios);
-      // Borrar el preview inmediatamente para no llenar la BD de basura
-      if (r.id) {
-        await api('DELETE', `/api/campanas/${r.id}`).catch(()=>{});
-      }
+      const q = new URLSearchParams();
+      if (zona)               q.set('zona',          zona);
+      if (municipios.length)  q.set('municipios',    JSON.stringify(municipios));
+      if (tipos_examen.length) q.set('tipos_examen', JSON.stringify(tipos_examen));
+      if (limite_envios)      q.set('limite_envios', limite_envios);
+      const r = await api('GET', `/api/campanas/count?${q}`);
+      setContandoDest(r.total);
     } catch { setContandoDest(0); }
     finally { setConteoLoading(false); }
   };
@@ -225,7 +224,6 @@ export default function AdminPage() {
   const enviarCampana = async (c: Campana) => {
     if (!confirm(`¿Enviar la campaña "${c.nombre}" a ${c.total_destinatarios} destinatarios? Esta acción no se puede deshacer.`)) return;
     setEnviando(true);
-    toast('⏳ Iniciando envío...', 'info');
 
     const LIMIT = 10;
     let offset = 0;
@@ -234,6 +232,9 @@ export default function AdminPage() {
     let totalProcessed = 0;
     let done = false;
     const allErrors: string[] = [];
+
+    // Mostrar barra de progreso fija
+    setSendProgress({ active: true, campanaName: c.nombre, processed: 0, total: c.total_destinatarios, sms: 0, email: 0, errors: [] });
 
     try {
       while (!done) {
@@ -251,12 +252,20 @@ export default function AdminPage() {
         done            = d.done;
         if (d.errores?.length) allErrors.push(...d.errores);
 
-        if (!done) {
-          toast(`⏳ Enviando... ${totalProcessed} de ${d.total} procesados (${totalSms} SMS ✅)`, 'info');
-        }
+        // Actualizar barra de progreso en tiempo real
+        setSendProgress(prev => ({
+          ...prev,
+          processed: totalProcessed,
+          total: d.total ?? prev.total,
+          sms: totalSms,
+          email: totalEmail,
+          errors: allErrors.slice(0, 20),
+        }));
 
         offset += LIMIT;
       }
+
+      setSendProgress(prev => ({ ...prev, active: false }));
 
       if (totalSms === 0 && allErrors.length > 0) {
         console.error('Errores de envío:', allErrors);
@@ -266,6 +275,7 @@ export default function AdminPage() {
       }
       load();
     } catch (e: any) {
+      setSendProgress(prev => ({ ...prev, active: false }));
       toast(e.message, 'error');
     } finally {
       setEnviando(false);
@@ -281,8 +291,11 @@ export default function AdminPage() {
     } catch (e:any) { toast(e.message, 'error'); }
   };
 
+
   return (
-    <div className="admin-layout">
+    <>
+      <SendProgressBar progress={sendProgress} />
+      <div className="admin-layout">
       {/* Sidebar */}
       <aside className="admin-sidebar">
         <div className="sidebar-label">Panel Admin</div>
@@ -765,7 +778,7 @@ export default function AdminPage() {
               })()}
 
               {/* Preview destinatarios */}
-              {campanaForm.filtro_zona && (
+              {(campanaForm.filtro_zona || campanaForm.filtro_municipios.length > 0 || campanaForm.filtro_tipo_examen.length > 0) && (
                 <div className="dest-preview">
                   <span style={{ fontSize:'1.1rem' }}>👥</span>
                   {conteoLoading
@@ -930,5 +943,6 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

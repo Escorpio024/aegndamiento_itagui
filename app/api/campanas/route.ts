@@ -70,8 +70,8 @@ export async function POST(req: Request) {
   let destinatarios_ids_json: string | null = null;
   const limitNum = parseInt(limite_envios, 10);
 
-  if (limitNum > 0 && nombre !== '__preview__') {
-    // Para la campaña real con límite, seleccionamos N al azar y guardamos los IDs
+  if (limitNum > 0) {
+    // Con límite: seleccionamos N al azar y guardamos los IDs exactos
     const idsRows = await db.prepare(`
       SELECT DISTINCT numero_identificacion
       FROM demanda_inducida
@@ -83,17 +83,13 @@ export async function POST(req: Request) {
     total = finalIds.length;
     destinatarios_ids_json = JSON.stringify(finalIds);
   } else {
-    // Si no hay límite o es solo preview, contamos todo normal
+    // Sin límite: contamos todos los distintos
     const countRow = await db.prepare(`
-      SELECT COUNT(DISTINCT numero_identificacion) as total
+      SELECT COUNT(DISTINCT numero_identificacion) AS total
       FROM demanda_inducida
       ${where}
     `).get(...params) as any;
     total = Number(countRow?.total ?? 0);
-    // Si es preview y hay límite, devolvemos el límite para el UI
-    if (nombre === '__preview__' && limitNum > 0 && total > limitNum) {
-      total = limitNum;
-    }
   }
 
   const result = await db.prepare(`
